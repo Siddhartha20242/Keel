@@ -72,11 +72,11 @@ def analyze(repo_dir, subdir, base, head, pr, title, out_dir, memory_file=None, 
         if new_src and not test_files:
             lane = "human_review" if lane == "human_review" else "canary"
             why.append(f"new source file(s) {', '.join(new_src)} have no tests in this PR")
+        sym_path = {s["qname"]: s["path"] for s in code["symbols"]}
+        files = sorted({sym_path[q] for q in edited if q in sym_path} | set(new_src))
         rv = tb.reviewers(edited) if edited else {"reviewers": []}
         cw = tb.changes_with([f for f in files if f.startswith("src/")]) if files else {"outcome": "not_in_graph"}
 
-        sym_path = {s["qname"]: s["path"] for s in code["symbols"]}
-        files = sorted({sym_path[q] for q in edited if q in sym_path} | set(new_src))
         led_path = pathlib.Path(memory_file).with_name("ledger.jsonl") if memory_file else None
         led_ok, led_msg = L.verify(L.read(led_path)) if led_path else (True, "no ledger yet")
         ctx = {
