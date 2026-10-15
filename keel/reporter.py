@@ -71,7 +71,7 @@ def build(ctx: dict, decision: dict, skeptic_body: str | None) -> str:
 
 def summary(ctx: dict) -> str | None:
     try:
-        text = complete(SUMMARY_SYSTEM, f"{ctx['title']}\n\nDIFF:\n{ctx['diff'][:5000]}", max_tokens=200)
+        text = complete(SUMMARY_SYSTEM, f"{ctx['title']}\n\nDIFF:\n{ctx['diff'][:5000]}", max_tokens=600)
     except (LLMUnavailable, Exception):
         return None
     if {t for t in TICK.findall(text) if t not in known_names(ctx)}:

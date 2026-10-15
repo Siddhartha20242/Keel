@@ -89,7 +89,7 @@ def render(findings: list[dict]) -> str:
 def review(ctx: dict) -> tuple[str, str, list[dict]]:
     """-> (body, risk, findings) with risk in low|medium|high|unknown."""
     try:
-        text = complete(SYSTEM, facts(ctx), max_tokens=600)
+        text = complete(SYSTEM, facts(ctx), max_tokens=1500)    # reasoning models spend part of this before they write the answer
     except LLMUnavailable as e:
         return (f"The Skeptic could not run: {e}. No verdict.\n\nRISK: unknown", "unknown", [])
     except Exception as e:                       # provider error: say so, never fake a verdict
@@ -98,8 +98,9 @@ def review(ctx: dict) -> tuple[str, str, list[dict]]:
     if not m and text:      # smaller models often skip the last line: ask once for just that line
         try:
             again = complete("Reply with exactly one line: RISK: low, RISK: medium or RISK: high. high = likely breaks behaviour or tests fail; "
-                             "medium = real unknowns; low = small and covered by passing tests.", f"{facts(ctx)[:3500]}\n\nYour review:\n{text}", max_tokens=20)
-            m = list(RISK_RE.finditer(again))
+                             "medium = real unknowns; low = small and covered by passing tests.", f"{facts(ctx)[:3500]}\n\nYour review:\n{text}", max_tokens=400)
+            w = re.search(r"\b(low|medium|high)\b", again, re.I)
+            m = [w] if w else []
         except Exception:
             m = []
     risk = m[-1].group(1).lower() if m else "unknown"

@@ -18,7 +18,8 @@ from .memory_io import load_into_graph, read_records
 from .tools import Toolbox
 
 
-FAILED = re.compile(r"^FAILED (tests/[\w./-]+\.py::[\w:.\[\]-]+)", re.M)
+# CI logs prefix every line (job, step, timestamp), so FAILED is not at the line start; it must follow whitespace or start the line
+FAILED = re.compile(r"(?:^|\s)FAILED (tests/[\w./-]+\.py::[\w:.\[\]-]+)", re.M)
 NODE_ID = re.compile(r"^tests/[\w./-]+\.py::[\w:.\[\]-]+$")
 
 
