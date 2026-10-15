@@ -40,7 +40,7 @@ class Handler(BaseHTTPRequestHandler):
         if length > MAX_BODY:
             return self._json(413, {"error": "body too large"})
         try:
-            data = json.loads(self.rfile.read(length) or b"{}")
+            data = json.loads((self.rfile.read(length) or b"{}").decode())
             code = self.store.shorten(data["url"])
         except (KeyError, ValueError, TypeError):
             return self._json(400, {"error": "send JSON like {\"url\": \"https://example.com\"}"})
