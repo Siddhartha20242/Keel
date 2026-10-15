@@ -26,16 +26,23 @@ def reset_worktree(wd: pathlib.Path) -> None:
 
 def build(db, case_id: str, sha: str, repo="flask", with_coverage=True):
     wd = checkout(case_id, sha)
-    code = extract_code(wd)
-    hist = extract_history(wd, sha)
+    return build_for(db, repo, case_id, REPO_DIR, wd, sha, subdir="", with_coverage=with_coverage)
+
+
+def build_for(db, repo: str, case_id: str, git_dir: pathlib.Path, workdir: pathlib.Path, sha: str, subdir: str = "", with_coverage=True):
+    """Build the code graph for `subdir` of the checkout at `workdir` (a worktree of `sha` in `git_dir`).
+    Code, coverage and history all come from that commit only."""
+    root = workdir / subdir if subdir else workdir
+    code = extract_code(root)
+    hist = extract_history(workdir, sha, prefix=f"{subdir.rstrip('/')}/" if subdir else "")
     covers = []
     if with_coverage:
-        cov = WORK / f"{case_id}.cov"
+        cov = pathlib.Path(str(workdir) + ".cov")
         if cov.exists():
             cov.unlink()
-        if run_coverage(wd, cov):
-            covers = covers_edges(wd, cov, code["symbols"])
-    day = subprocess.run(["git", "log", "-1", "--format=%ad", "--date=short", sha], cwd=REPO_DIR, capture_output=True, text=True).stdout.strip()
+        if run_coverage(root, cov):
+            covers = covers_edges(root, cov, code["symbols"])
+    day = subprocess.run(["git", "log", "-1", "--format=%ad", "--date=short", sha], cwd=git_dir, capture_output=True, text=True).stdout.strip()
     meta = {"repo": repo, "ref": sha, "ref_ts": G._ts(day)}
     g = G.load_code_graph(db, G.code_graph_name(repo, case_id), code, hist, covers, meta)
     return g, G.stats(g)

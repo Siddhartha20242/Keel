@@ -11,6 +11,10 @@ from collections import defaultdict
 from itertools import combinations
 
 AMBIGUITY_CAP = 3          # attribute call `x.name()` links only if <= this many candidates
+# `x.encode()` on an unknown `x` is almost always a str/dict/list/file method, not our function of the same name
+BUILTIN_METHODS = set("""encode decode get items keys values pop update add append extend remove insert index count sort reverse copy clear
+join split rsplit strip lstrip rstrip replace format startswith endswith find lower upper title read write readline readlines
+close flush seek open send recv connect bind listen accept run start stop wait put set setdefault discard union""".split())
 MAX_FILES_PER_COMMIT = 15  # bulk commits (reformat, bump) say nothing about co-change
 
 
@@ -216,7 +220,7 @@ def extract_code(root: pathlib.Path) -> dict:
                         link(q, t)
                         continue
                 cands = [c for c in by_name.get(attr, []) if symbols[c]["kind"] != "class" or True]
-                if 0 < len(cands) <= AMBIGUITY_CAP and not attr.startswith("__"):
+                if 0 < len(cands) <= AMBIGUITY_CAP and not attr.startswith("__") and attr not in BUILTIN_METHODS:
                     for c in cands:
                         link(q, c)
 
@@ -233,8 +237,9 @@ def _git(root, *args):
     return subprocess.run(["git", *args], cwd=root, capture_output=True, text=True, check=True).stdout
 
 
-def extract_history(root: pathlib.Path, ref: str = "HEAD") -> dict:
-    """Commits reachable from `ref` (so a replay at a parent commit cannot see the fix)."""
+def extract_history(root: pathlib.Path, ref: str = "HEAD", prefix: str = "") -> dict:
+    """Commits reachable from `ref` (so a replay at a parent commit cannot see the fix).
+    `prefix` = subfolder of the repo that holds src/ and tests/ (e.g. "demo-app/"); paths are returned relative to it."""
     out = _git(root, "log", ref, "--no-merges", "--name-only", "--date=short",
                "--format=@@%H\x1f%an\x1f%ad\x1f%s")
     commits, cochange, authored = [], defaultdict(int), defaultdict(int)
@@ -242,7 +247,8 @@ def extract_history(root: pathlib.Path, ref: str = "HEAD") -> dict:
     for blk in out.split("@@")[1:]:
         lines = blk.strip("\n").split("\n")
         sha, author, at, subject = lines[0].split("\x1f", 3)
-        fs = [f for f in lines[1:] if f.endswith(".py") and (f.startswith("src/") or f.startswith("tests/"))]
+        fs = [f[len(prefix):] for f in lines[1:] if f.startswith(prefix) and f.endswith(".py")
+              and (f[len(prefix):].startswith("src/") or f[len(prefix):].startswith("tests/"))]
         if not fs:
             continue
         commits.append({"sha": sha, "author": author, "at": at, "subject": subject, "files": fs, "reverted": False})
