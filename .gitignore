@@ -5,3 +5,6 @@ data/work/
 data/*.cov
 .env
 ci-out/
+out/
+data/eval_results.json
+scripts/live_demo.sh

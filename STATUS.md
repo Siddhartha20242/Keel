@@ -56,7 +56,7 @@ PROVEN means I ran it and saw the result below. WRITTEN means the code exists bu
 - The MCP server (`python -m keel mcp`): imports cleanly, never connected to a client.
 - `./scripts/setup.sh` from a clean machine. I ran its steps by hand on this one.
 - Any language other than Python, any repo other than pallets/flask.
-- Opening a real pull request from the replay tool: it writes a description to `out/` and stops.
+- Opening a real pull request from the replay tool: it writes a description to a local `out/` folder (not committed) and stops.
 
 ## UNKNOWN
 - How often the Fixer picks the right place to edit: the first real attempt (#5) was wrong and the second (#6) was right. I have

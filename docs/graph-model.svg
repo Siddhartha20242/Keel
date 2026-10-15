@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 390" width="960" height="390" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif">
+  <rect width="960" height="390" rx="14" fill="#ffffff" stroke="#d0d7de"/>
+  <defs><marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#57606a"/></marker></defs>
+  <text x="30" y="36" font-size="17" font-weight="700" fill="#1f2328">The two graphs</text>
+  <text x="30" y="56" font-size="12" fill="#57606a">Code graph: one per commit, rebuilt from the PR's base on every run.   Audit graph: one per repo, kept as a hash-chained file.</text>
+  <line x1="480" y1="72" x2="480" y2="372" stroke="#d0d7de" stroke-dasharray="4 4"/>
+  <g font-size="13" text-anchor="middle" font-weight="600" fill="#1f2328">
+    <rect x="40" y="95" width="100" height="40" rx="8" fill="#ddf4ff" stroke="#54aeff"/><text x="90" y="120">File</text>
+    <rect x="200" y="95" width="110" height="40" rx="8" fill="#ddf4ff" stroke="#54aeff"/><text x="255" y="120">Symbol</text>
+    <rect x="360" y="95" width="90" height="40" rx="8" fill="#fff8c5" stroke="#d4a72c"/><text x="405" y="120">Test</text>
+    <rect x="40" y="250" width="100" height="40" rx="8" fill="#dafbe1" stroke="#4ac26b"/><text x="90" y="275">Commit</text>
+    <rect x="200" y="250" width="110" height="40" rx="8" fill="#dafbe1" stroke="#4ac26b"/><text x="255" y="275">Person</text>
+  </g>
+  <g stroke="#57606a" stroke-width="1.4" fill="none" marker-end="url(#b)" font-size="11">
+    <path d="M140,115 L198,115"/><path d="M360,115 L312,115"/>
+    <path d="M255,95 C255,60 300,60 300,95"/>
+    <path d="M90,95 C90,68 60,68 60,93"/>
+    <path d="M90,250 L90,137"/><path d="M200,270 L142,270"/>
+  </g>
+  <g font-size="11" fill="#57606a" text-anchor="middle">
+    <text x="169" y="108">CONTAINS</text><text x="336" y="108">COVERS</text>
+    <text x="330" y="74">CALLS</text><text x="104" y="86" text-anchor="start">IMPORTS, CO_CHANGED</text>
+    <text x="126" y="200" text-anchor="start">TOUCHED</text><text x="171" y="262">AUTHORED</text>
+  </g>
+  <text x="250" y="325" text-anchor="middle" font-size="12" fill="#57606a">PageRank over CALLS ranks load-bearing code.</text>
+  <text x="250" y="343" text-anchor="middle" font-size="12" fill="#57606a">Weakly connected components over strong CO_CHANGED find files that move together.</text>
+  <g font-size="13" text-anchor="middle" font-weight="600" fill="#1f2328">
+    <rect x="500" y="95" width="120" height="40" rx="8" fill="#fbefff" stroke="#a475f9"/><text x="560" y="120">PullRequest</text>
+    <rect x="690" y="95" width="100" height="40" rx="8" fill="#ffebe9" stroke="#ff8182"/><text x="740" y="120">AgentRun</text>
+    <rect x="860" y="95" width="80" height="40" rx="8" fill="#fff8c5" stroke="#d4a72c"/><text x="900" y="120">Verdict</text>
+    <rect x="690" y="215" width="100" height="40" rx="8" fill="#fff8c5" stroke="#d4a72c"/><text x="740" y="240">Finding</text>
+    <rect x="500" y="215" width="100" height="40" rx="8" fill="#ddf4ff" stroke="#54aeff"/><text x="550" y="240">File</text>
+    <rect x="860" y="215" width="80" height="40" rx="8" fill="#fff8c5" stroke="#d4a72c"/><text x="900" y="240">Test</text>
+  </g>
+  <g stroke="#57606a" stroke-width="1.4" fill="none" marker-end="url(#b)">
+    <path d="M620,115 L688,115"/><path d="M790,115 L858,115"/>
+    <path d="M740,135 L740,213"/><path d="M690,235 L602,235"/><path d="M790,235 L858,235"/>
+    <path d="M765,95 C765,62 715,62 715,93"/>
+  </g>
+  <g font-size="11" fill="#57606a" text-anchor="middle">
+    <text x="654" y="108">HAS_RUN</text><text x="824" y="108">PRODUCED</text>
+    <text x="752" y="180" text-anchor="start">PRODUCED</text><text x="646" y="228">ABOUT</text><text x="824" y="228">SUGGESTS</text>
+    <text x="790" y="68">NEXT (hash chain)</text>
+  </g>
+  <text x="720" y="325" text-anchor="middle" font-size="12" fill="#57606a">Each record carries the hash of the one before it.</text>
+  <text x="720" y="343" text-anchor="middle" font-size="12" fill="#57606a">"Why did this ship?" is a walk from the PullRequest.</text>
+</svg>
