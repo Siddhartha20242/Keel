@@ -169,3 +169,17 @@ def test_skeptic_facts_list_exact_file_paths_and_clean_non_findings():
     ctx = {**CTX, "files": ["src/shortener/store.py"], "memory": []}
     assert "src/shortener/store.py" in skeptic.facts(ctx)
     assert skeptic.parse_findings("1. No functional change | file: src/shortener/store.py | test: test_x", {"src/shortener/store.py"}) == []
+
+
+def test_failing_ids_parse_only_wellformed_pytest_ids():
+    from keel.fix import NODE_ID, failing_ids
+    log = ("FAILED tests/test_store.py::test_same_url_same_code - KeyError: 'x'\n"
+           "FAILED tests/test_server.py::TestA::test_b[param-1] - assert 1 == 2\n"
+           "FAILED ../../etc/passwd::x - nope\n"
+           "FAILED tests/test_x.py::test_y; rm -rf / - injected\n"
+           "some text FAILED tests/test_z.py::test_not_at_line_start\n")
+    ids = failing_ids(log)
+    assert all(NODE_ID.match(i) for i in ids)                       # only well-formed pytest ids ...
+    assert not any(c in i for i in ids for c in "; /\\" if c != "/")  # ... never the injected tail
+    assert "tests/test_x.py::test_y" in ids and "tests/test_store.py::test_same_url_same_code" in ids
+    assert not any("passwd" in i or "not_at_line_start" in i for i in ids)

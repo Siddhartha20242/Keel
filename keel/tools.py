@@ -276,6 +276,17 @@ class Toolbox:
         t = t.replace(".py.", ".")
         return t[:-3] if t.endswith(".py") else t
 
+    def run_nodeids(self, ids: list[str], timeout: int = 300) -> dict:
+        """Run exact pytest node ids (tests/x.py::name). Only well-formed ids are run; used to check that a fix makes the failing tests pass."""
+        import os
+        ok = [i for i in ids if re.match(r"^tests/[\w./-]+\.py::[\w:.\[\]-]+$", i)]
+        if not ok:
+            return {"passed": False, "failed": [], "ran": 0}
+        env = dict(os.environ, PYTHONPATH=str(self.workdir / "src"))
+        p = subprocess.run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", "-o", "addopts=", *ok],
+                           cwd=self.workdir, env=env, capture_output=True, text=True, timeout=timeout)
+        return {"passed": p.returncode == 0, "failed": sorted(set(re.findall(r"^(?:FAILED|ERROR) (\S+)", p.stdout, re.M))), "ran": len(ok)}
+
     def run_tests(self, tests: list[str], timeout: int = 300, extra_files: list[str] | None = None) -> dict:
         ids = []
         for t in tests[:300]:

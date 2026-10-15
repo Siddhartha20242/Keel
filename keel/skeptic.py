@@ -95,6 +95,13 @@ def review(ctx: dict) -> tuple[str, str, list[dict]]:
     except Exception as e:                       # provider error: say so, never fake a verdict
         return (f"The Skeptic could not run ({type(e).__name__}). No verdict.\n\nRISK: unknown", "unknown", [])
     m = list(RISK_RE.finditer(text))
+    if not m and text:      # smaller models often skip the last line: ask once for just that line
+        try:
+            again = complete("Reply with exactly one line: RISK: low, RISK: medium or RISK: high. high = likely breaks behaviour or tests fail; "
+                             "medium = real unknowns; low = small and covered by passing tests.", f"{facts(ctx)[:3500]}\n\nYour review:\n{text}", max_tokens=20)
+            m = list(RISK_RE.finditer(again))
+        except Exception:
+            m = []
     risk = m[-1].group(1).lower() if m else "unknown"
     body = RISK_RE.sub("", text).strip()
     findings = parse_findings(body, set(ctx.get("files", [])) | set(ctx["new_files"]) | set(ctx["changed_tests"]))

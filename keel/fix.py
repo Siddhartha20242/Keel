@@ -5,7 +5,7 @@ It never merges; a failed attempt becomes a comment on the issue.
     python -m keel.fix --repo-dir . --subdir demo-app --sha <main sha> --issue 5 --title "..." --body-file body.txt --repo o/r
 """
 from __future__ import annotations
-import argparse, pathlib, shutil, subprocess, tempfile
+import argparse, pathlib, re, shutil, subprocess, tempfile
 try:
     from dotenv import load_dotenv
 except ImportError:          # CI passes keys through the environment
@@ -16,6 +16,15 @@ from .llm import have_key
 from .llm_agent import run_agent
 from .memory_io import load_into_graph, read_records
 from .tools import Toolbox
+
+
+FAILED = re.compile(r"^FAILED (tests/[\w./-]+\.py::[\w:.\[\]-]+)", re.M)
+NODE_ID = re.compile(r"^tests/[\w./-]+\.py::[\w:.\[\]-]+$")
+
+
+def failing_ids(log: str) -> list[str]:
+    """Pytest node ids of the tests that failed in a CI log. Only well-formed ids; anything else in the log is ignored."""
+    return sorted({i for i in FAILED.findall(log) if NODE_ID.match(i)})[:30]
 
 
 def fix(repo_dir, subdir, sha, issue, title, body, memory_file=None, repo_name="demoapp", db=None, model=None, provider=None, kind="issue") -> dict:
@@ -38,6 +47,16 @@ def fix(repo_dir, subdir, sha, issue, title, body, memory_file=None, repo_name="
         text = f"{title}\n\n{body[:2500]}"
     res = run_agent(tb, case, text, model=model, provider=provider)
     res["worktree"], res["tmp"] = str(wt), str(tmp)
+    if kind == "ci":
+        # The branch was already red, so "no NEW failures" proves nothing. A fix must make the tests that failed in CI pass.
+        ids = failing_ids(body)
+        res["failing_ids"] = ids
+        res["fix_verified"] = None
+        if ids and res.get("diff"):
+            r = tb.run_nodeids(ids)
+            res["fix_verified"], res["still_failing"] = r["passed"], r["failed"]
+            if r["passed"]:
+                res["pr_body"] += f"\n\n**Verified:** the {len(ids)} test(s) that failed in CI now pass with this change."
     return res
 
 
@@ -85,7 +104,11 @@ def main(argv=None):
         diff, passed = res.get("diff", ""), res.get("tests_passed")
         print(res["pr_body"])
         print(f"\n--- lane {res['lane']} | tests ran {res['tests_run']} | passed {passed} | diff {len(diff)} chars")
-        if not diff:
+        if a.kind == "ci" and diff and res.get("fix_verified") is not True:
+            why = (f"the tests that failed in CI still fail ({', '.join(x.split('::')[-1] for x in res.get('still_failing', [])[:3])})"
+                   if res.get("fix_verified") is False else "I could not read which tests failed, so I cannot check the fix")
+            msg = f"The agent changed the code but {why}. I did not open a pull request. A person needs to look at this."
+        elif not diff:
             msg = "The agent tried but made no change, so there is nothing to review. A person needs to look at this."
         elif not passed:
             msg = "The agent made a change but the tests the graph selected failed, so I did not open a pull request. A person needs to look at this."
