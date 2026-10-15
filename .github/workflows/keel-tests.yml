@@ -1,0 +1,22 @@
+name: keel-tests
+
+on:
+  push:
+    branches: [main]
+    paths: ["keel/**", "tests/**", "queries/**", ".github/workflows/keel-tests.yml"]
+  pull_request:
+    paths: ["keel/**", "tests/**", "queries/**", ".github/workflows/keel-tests.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -r requirements-ci.txt
+      - name: unit tests (no database)
+        run: python -m pytest tests/test_unit.py tests/test_pipeline_units.py -q

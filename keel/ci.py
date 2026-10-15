@@ -26,7 +26,7 @@ def analyze(repo_dir, subdir, base, head, pr, title, out_dir, memory_file=None, 
     out_dir.mkdir(parents=True, exist_ok=True)
     prefix = f"{subdir.rstrip('/')}/" if subdir else ""
     db = db or G.connect()
-    tmp = pathlib.Path(tempfile.mkdtemp(prefix="keel-ci-"))
+    tmp = pathlib.Path(tempfile.mkdtemp(prefix="keel-ci-")).resolve()
     wts = {}
     try:
         for name, sha in (("base", base), ("head", head)):

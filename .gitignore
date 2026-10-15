@@ -4,3 +4,4 @@ targets/
 data/work/
 data/*.cov
 .env
+ci-out/

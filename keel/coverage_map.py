@@ -9,6 +9,7 @@ import coverage
 
 
 def run_coverage(workdir: pathlib.Path, datafile: pathlib.Path, timeout=900) -> bool:
+    workdir, datafile = pathlib.Path(workdir).resolve(), pathlib.Path(datafile).resolve()
     rc = datafile.with_suffix(".rc")
     rc.write_text(f"[run]\ndynamic_context = test_function\nsource = {workdir/'src'}\ndata_file = {datafile}\nbranch = False\n")
     env = dict(os.environ, PYTHONPATH=str(workdir / "src"))
@@ -19,6 +20,7 @@ def run_coverage(workdir: pathlib.Path, datafile: pathlib.Path, timeout=900) -> 
 
 
 def covers_edges(workdir: pathlib.Path, datafile: pathlib.Path, symbols: list[dict]) -> list[dict]:
+    workdir = pathlib.Path(workdir).resolve()      # coverage.py reports real paths (/private/var on macOS)
     data = coverage.CoverageData(basename=str(datafile)); data.read()
     by_file: dict[str, list[dict]] = {}
     for s in symbols:

@@ -1,0 +1,174 @@
+name: pr
+
+# Runs on pull requests that touch the app. Same-repo PRs only get the agents (fork PRs have no secrets and a read-only token).
+on:
+  pull_request:
+    paths: ["demo-app/**", "scripts/smoke.sh", ".github/workflows/pr.yml"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  OPENAI_BASE_URL: ${{ vars.OPENAI_BASE_URL || 'https://api.groq.com/openai/v1' }}
+  KEEL_MODEL: ${{ vars.KEEL_MODEL || 'openai/gpt-oss-120b' }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install pytest==8.3.5
+      - run: python -m pytest tests -q
+        working-directory: demo-app
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t shortener:pr demo-app
+      - uses: anchore/sbom-action@v0
+        with:
+          image: shortener:pr
+          format: cyclonedx-json
+          output-file: sbom.cdx.json
+          artifact-name: sbom.cdx.json
+      - name: smoke the image
+        run: |
+          docker run -d --name app -p 8080:8080 shortener:pr
+          for i in $(seq 1 20); do curl -fsS localhost:8080/health >/dev/null && break || sleep 1; done
+          ./scripts/smoke.sh http://localhost:8080
+
+  sast:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with: { languages: python }
+      - uses: github/codeql-action/analyze@v3
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  dependencies:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install pip-audit && pip-audit -r demo-app/requirements.txt
+
+  # Build the graph from the PR's base commit, map the diff onto it, run the tests it selects, score the risk.
+  analyze:
+    runs-on: ubuntu-latest
+    services:
+      falkordb:
+        image: falkordb/falkordb:latest
+        ports: ["6379:6379"]
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -r requirements-ci.txt
+      - name: load agent memory (kept on the keel-memory branch)
+        run: |
+          mkdir -p .keel-memory
+          if git ls-remote --exit-code --heads origin keel-memory >/dev/null 2>&1; then
+            git fetch --depth=1 origin keel-memory
+            git show FETCH_HEAD:memory.jsonl > .keel-memory/memory.jsonl || true
+          fi
+      - name: analyze
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          python -m keel.ci analyze --repo-dir . --subdir demo-app \
+            --base "${{ github.event.pull_request.base.sha }}" --head "${{ github.event.pull_request.head.sha }}" \
+            --pr "${{ github.event.pull_request.number }}" --title "$PR_TITLE" \
+            --out ci-out --memory .keel-memory/memory.jsonl
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ci-context
+          path: ci-out/context.json
+
+  skeptic:
+    needs: analyze
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install openai anthropic
+      - uses: actions/download-artifact@v4
+        with: { name: ci-context, path: ci-out }
+      - name: skeptic review
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: python -m keel.skeptic --repo "${{ github.repository }}" --pr "${{ github.event.pull_request.number }}"
+
+  # Runs even if the Skeptic job failed: no review then means "human approval required", never a silent pass.
+  risk-gate:
+    needs: [analyze, skeptic]
+    if: ${{ always() && needs.analyze.result == 'success' && github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - uses: actions/download-artifact@v4
+        with: { name: ci-context, path: ci-out }
+      - name: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python -m keel.gate --repo "${{ github.repository }}" --pr "${{ github.event.pull_request.number }}"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ci-decision
+          path: ci-out/decision.json
+          if-no-files-found: ignore
+
+  reporter:
+    needs: [analyze, risk-gate]
+    if: ${{ always() && needs.analyze.result == 'success' && github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install openai anthropic
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: ci-*
+          merge-multiple: true
+          path: ci-out
+      - name: report
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: python -m keel.reporter --repo "${{ github.repository }}" --pr "${{ github.event.pull_request.number }}"

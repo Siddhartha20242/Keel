@@ -3,7 +3,6 @@ and are loaded into the per-repo memory graph at the start of each analysis."""
 from __future__ import annotations
 import json, pathlib
 
-from . import graph as G
 
 
 def read_records(path: pathlib.Path | None) -> list[dict]:
@@ -26,6 +25,7 @@ def append_record(path: pathlib.Path, rec: dict) -> None:
 
 
 def load_into_graph(db, repo: str, records: list[dict]) -> int:
+    from . import graph as G          # lazy: the memory CLI runs in a job with no third-party packages
     g = db.select_graph(G.memory_graph_name(repo))
     try:
         g.delete()
