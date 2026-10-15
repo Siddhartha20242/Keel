@@ -78,3 +78,21 @@ def test_explain_walks_the_graph(tmp_path):
     assert g.ro_query("MATCH (:AgentRun)-[n:NEXT]->(:AgentRun) RETURN count(n)").result_set[0][0] == 7
     assert g.ro_query("MATCH (:PullRequest)-[:TOUCHES]->(f:File) RETURN count(DISTINCT f)").result_set[0][0] == 1
     db.select_graph("keel_audit_pytest").delete()
+
+
+def test_findings_become_graph_nodes_about_files_and_suggesting_tests(tmp_path):
+    try:
+        from keel import graph as G
+        db = G.connect(); db.list_graphs()
+    except Exception:
+        pytest.skip("FalkorDB not running")
+    f = tmp_path / "l.jsonl"
+    blob = {**BLOB, "findings": [{"text": "unchecked body", "file": "src/shortener/server.py", "test": "test_big_body"},
+                                 {"text": "dedupe", "file": None, "test": None}]}
+    ledger.append(f, ledger.stage_entries(blob, "merged"))
+    ledger.load_into_graph(db, "pytest2", ledger.read(f))
+    g = db.select_graph("keel_audit_pytest2")
+    from keel import graph as G2
+    rows = g.ro_query(G2.read_query("findings_for_pr"), {"pr": 7}).result_set
+    assert rows == [[0, "unchecked body", "src/shortener/server.py", "test_big_body"], [1, "dedupe", None, None]]
+    g.delete()

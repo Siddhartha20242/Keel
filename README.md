@@ -1,14 +1,15 @@
 # Keel
 
-Keel takes work from a GitHub issue to production and keeps a human in charge at every gate. A code graph in FalkorDB sits
-behind each decision, so what the agents say is checked against how the code is actually connected, tested and owned.
-It is for DevOps teams who want agents in the pipeline without giving them the merge button.
+After AI writes code, the slow and risky steps are review, testing, security and release. Keel puts agents in those steps and
+makes a second agent check the first, so a person can see why a change was allowed through. A code graph in FalkorDB sits
+behind every decision, and every agent action is stored in that graph, so "why did this ship" is a query, not a log search.
 
-An issue is triaged against the graph. A person decides whether an agent should try it. The agent drafts a fix and opens a
-draft pull request only if the tests the graph selects pass. The pull request goes through CI, a Skeptic agent that tries
-to break it, a gate that decides how much human approval it needs, and a Reporter that lists what a person still has to
-decide. A human merges. Then the image is built, run, smoke tested and published, and checked again every hour. A failing
-check opens an incident issue, which starts the loop again. Nothing in Keel merges, closes or assigns anything.
+In practice: an issue is triaged against the graph. A person decides whether an agent should try it, or the Fixer reacts when
+the unit tests fail. The agent drafts a fix and opens a draft pull request only if the tests the graph selects pass. The pull
+request goes through CI, a Skeptic agent that tries to break it and suggests the tests that would catch each problem, a gate
+that decides how much human approval it needs, and a Reporter that lists what a person still has to decide. A human merges.
+Then the image is built, run, smoke tested and published, and checked again every hour; a failing check opens an incident
+issue. Nothing in Keel merges, closes or assigns anything.
 
 Track: Agents That Act on Connected Data (secondary: Agent Memory).
 
@@ -39,6 +40,7 @@ Three modes of the replay tool: `oracle` applies the real upstream fix as the pa
 |---|---|---|
 | Issue | `issue.yml`: triage comment with where the graph points, who has changed it, which tests cover it, what depends on it, and whether an agent could try | a person reads it |
 | Implement | `fix.yml`: after a person adds the `keel:fix` label, the agent tries a fix and opens a draft PR only if the graph-selected tests pass | a person applied the label |
+| Fix a red build | `fixer.yml`: when the unit tests fail on a PR branch, the Fixer reads the log, tries a fix, and opens a draft PR into that branch if the selected tests pass | a person reviews the draft |
 | Pull request | `pr.yml`: tests, image and SBOM, CodeQL, gitleaks, `pip-audit`, graph analysis, Skeptic, risk gate, Reporter | a person reviews and merges |
 | Release and deploy | `main.yml`: build, run, smoke test, push the image to the container registry | runs after the human merge |
 | Monitor | `main.yml` every hour: build from main and smoke test again | |
@@ -62,8 +64,8 @@ SBOM, runs CodeQL, gitleaks and `pip-audit`, and smoke tests the image. A job ca
 base commit, maps the diff onto it, runs the tests the graph selects on base and on head (only failures the PR introduces
 count), and scores the risk.
 
-Then three jobs run in order. The Skeptic reads the diff and the graph facts and posts one review: a few ways the change
-could break, then a final `RISK: low`, `medium` or `high` line. The `risk-gate` job reads that verdict, ignores any comment
+Then three jobs run in order. The Skeptic reads the diff and the graph facts and posts one review: up to four findings, each
+naming a file and a test that would catch it, then a final `RISK: low`, `medium` or `high` line. The `risk-gate` job reads that verdict, ignores any comment
 that is not from `github-actions[bot]`, and fails only on `RISK: high` or on tests the PR broke. If there is no review it
 says so and asks for a human; it does not pass silently. The Reporter posts a status note that quotes both and lists what a
 person still has to decide, including files that usually change together with the PR's files but were not touched (weakly connected

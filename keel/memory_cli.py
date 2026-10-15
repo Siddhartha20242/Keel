@@ -7,6 +7,7 @@ from . import ledger
 from .memory_io import append_record
 
 DATA = re.compile(r"<!-- keel:data (\{.*?\}) -->", re.S)
+FINDINGS = re.compile(r"<!-- keel:findings (\[.*?\]) -->", re.S)
 
 
 def main(argv=None):
@@ -25,6 +26,9 @@ def main(argv=None):
         return
     rec = json.loads(m.group(1))
     rec["outcome"] = a.outcome
+    sk = latest_trusted(comments, MARK["skeptic"])        # findings only from the bot's own Skeptic comment
+    fm = FINDINGS.search(sk["body"]) if sk else None
+    rec["findings"] = json.loads(fm.group(1)) if fm else []
     pathlib.Path(a.file).parent.mkdir(parents=True, exist_ok=True)
     append_record(pathlib.Path(a.file), rec)
     print(f"recorded {rec['id']}: {a.outcome} ({len(rec.get('symbols', []))} symbols)")

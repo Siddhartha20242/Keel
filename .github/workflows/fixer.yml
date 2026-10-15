@@ -1,0 +1,67 @@
+name: fixer
+
+# When the unit tests fail on a pull request branch, the Fixer reads the failure log, tries a fix with the graph tools, runs the tests the
+# graph selects and, only if they pass, opens a DRAFT pull request that targets the failing branch. A person reviews and merges it.
+# The gate failing on RISK: high is a decision, not a bug, so only the `test` job triggers this. Branches starting with keel/ are
+# skipped so the Fixer never fixes its own fixes. Same-repo PRs only: the PR's code is checked out and its tests run.
+on:
+  workflow_run:
+    workflows: ["pr"]
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: read
+
+env:
+  OPENAI_BASE_URL: ${{ vars.OPENAI_BASE_URL || 'https://api.groq.com/openai/v1' }}
+  KEEL_MODEL: ${{ vars.KEEL_MODEL || 'openai/gpt-oss-120b' }}
+
+jobs:
+  fixer:
+    if: >-
+      github.event.workflow_run.conclusion == 'failure' &&
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      !startsWith(github.event.workflow_run.head_branch, 'keel/')
+    runs-on: ubuntu-latest
+    services:
+      falkordb:
+        image: falkordb/falkordb:latest
+        ports: ["6379:6379"]
+    steps:
+      - uses: actions/checkout@v4                       # Keel's own code, from the default branch
+      - uses: actions/checkout@v4                       # the failing branch, as data and as the thing to fix
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          path: target
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -r requirements-ci.txt
+      - name: is there a failing test job, and have we tried before?
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          PR: ${{ github.event.workflow_run.pull_requests[0].number }}
+        run: |
+          FAILED=$(gh run view "$RUN_ID" --repo "${{ github.repository }}" --json jobs --jq '[.jobs[]|select(.conclusion=="failure")|.name]|join(",")')
+          echo "failed jobs: $FAILED"
+          case ",$FAILED," in *,test,*) ;; *) echo "no failing unit-test job: nothing to fix"; echo "go=no" >> "$GITHUB_OUTPUT"; exit 0;; esac
+          if [ -z "$PR" ]; then echo "no pull request attached"; echo "go=no" >> "$GITHUB_OUTPUT"; exit 0; fi
+          if git -C target ls-remote --exit-code --heads origin "keel/fix-pr-$PR" >/dev/null 2>&1; then echo "already tried once for PR $PR"; echo "go=no" >> "$GITHUB_OUTPUT"; exit 0; fi
+          gh run view "$RUN_ID" --repo "${{ github.repository }}" --log-failed | tail -n 150 | head -c 6000 > failure.txt
+          echo "go=yes" >> "$GITHUB_OUTPUT"
+      - name: try a fix
+        if: steps.gate.outputs.go == 'yes'
+        env:
+          GH_TOKEN: ${{ secrets.KEEL_PAT || github.token }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          PR: ${{ github.event.workflow_run.pull_requests[0].number }}
+          HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          python -m keel.fix --repo-dir target --sha "${{ github.event.workflow_run.head_sha }}" --issue "$PR" --kind ci \
+            --title "tests failing on $HEAD_BRANCH" --body-file failure.txt --repo "${{ github.repository }}" \
+            --base-branch "$HEAD_BRANCH" --branch "keel/fix-pr-$PR"

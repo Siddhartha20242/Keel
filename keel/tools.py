@@ -160,10 +160,12 @@ class Toolbox:
         paths = sorted({self.g.ro_query("MATCH (s:Symbol {qname:$q}) RETURN s.path", {"q": q}).result_set[0][0] for q in qn})
         files = self._ro(self.g, "risk_files", {"paths": paths, "now": self.ref_ts()}, ("file", "commits", "commits_last_year", "reverted", "last_touched"))
         total = self.g.ro_query("MATCH (s:Symbol {kind:'code'}) RETURN count(s)").result_set[0][0]
-        comp = risk.components(sym, files, total)
+        imp = self._ro(self.g, "import_radius", {"paths": paths}, ("file", "importers"))
+        total_src = self.g.ro_query("MATCH (f:File {kind:'src'}) RETURN count(f)").result_set[0][0]
+        comp = risk.components(sym, files, total, imp, total_src)
         s = risk.score(comp)
         out = {"outcome": "answered_with_path", "score": round(s, 3), "components": {k: round(v, 3) for k, v in comp.items()},
-               "weights": risk.WEIGHTS, "symbols": sym, "files": files,
+               "weights": risk.WEIGHTS, "symbols": sym, "files": files, "importers": imp,
                "lane_before_tests": risk.lane(s)[0]}
         self.evidence["risk"] = out
         return out

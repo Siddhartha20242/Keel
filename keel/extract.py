@@ -224,8 +224,17 @@ def extract_code(root: pathlib.Path) -> dict:
                     for c in cands:
                         link(q, c)
 
+    imports: set[tuple[str, str]] = set()
+    for m in mods.values():
+        for target in m.imports.values():
+            t = target
+            while t and t not in mods:                    # `pkg.mod.name` -> the module `pkg.mod`
+                t = t.rsplit(".", 1)[0] if "." in t else ""
+            if t and t != m.name:
+                imports.add((m.path, mods[t].path))
     files = {m.path: {"path": m.path, "kind": "test" if m.is_test else "src"} for m in mods.values()}
     return {
+        "imports": [{"src": a, "dst": b} for a, b in sorted(imports)],
         "files": list(files.values()),
         "symbols": list(symbols.values()),
         "calls": [{"src": a, "dst": b, "n": n} for (a, b), n in calls.items()],

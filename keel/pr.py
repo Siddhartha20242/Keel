@@ -30,6 +30,7 @@ def build_body(issue: dict, ev: dict, lane: str, lane_reasons: list[str], edited
         L.append("| signal | value | what it measures |\n|---|---|---|")
         meaning = {"centrality": "PageRank percentile of the edited symbols over the call graph",
                    "reach": "transitive callers within 3 hops (log scale)",
+                   "import_reach": "share of other source files that import the edited files (4 levels)",
                    "coverage_gap": "share of edited symbols that no test executes",
                    "churn": "commits touching these files in the last year",
                    "reverts": "earlier changes to these files that were reverted"}

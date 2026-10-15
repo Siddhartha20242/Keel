@@ -2,13 +2,14 @@ Fixes #5916: `provide_automatic_options` is weird
 
 Replays the upstream fix for this issue (commit e82db2ca) so the decision pipeline can be evaluated.
 
-## Merge lane: **canary**
-Risk score **0.481** (weights: centrality 0.3, reach 0.25, coverage_gap 0.2, churn 0.15, reverts 0.1)
+## Merge lane: **human review**
+Risk score **0.536** (weights: centrality 0.25, reach 0.2, import_reach 0.15, coverage_gap 0.2, churn 0.1, reverts 0.1)
 
 | signal | value | what it measures |
 |---|---|---|
-| centrality | 0.961 | PageRank percentile of the edited symbols over the call graph |
+| centrality | 0.976 | PageRank percentile of the edited symbols over the call graph |
 | reach | 0.592 | transitive callers within 3 hops (log scale) |
+| import_reach | 0.957 | share of other source files that import the edited files (4 levels) |
 | coverage_gap | 0.0 | share of edited symbols that no test executes |
 | churn | 0.3 | commits touching these files in the last year |
 | reverts | 0.0 | earlier changes to these files that were reverted |
@@ -18,9 +19,9 @@ Risk score **0.481** (weights: centrality 0.3, reach 0.25, coverage_gap 0.2, chu
 - `src/flask/sansio/app.py`: `sansio.app.App.add_url_rule`
 
 ## Why here (localization)
-- `src/flask/app.py` score 4.771, best symbol `app.Flask.raise_routing_exception` via tests test_provide_automatic_options_attr, test_view_provide_automatic_options_attr
-- `src/flask/sansio/app.py` score 3.371, best symbol `sansio.app.App.trap_http_exception` via tests test_provide_automatic_options_attr, test_view_provide_automatic_options_attr
-- `src/flask/cli.py` score 3.001, best symbol `cli.routes_command`
+- `src/flask/app.py` score 4.758, best symbol `app.Flask.raise_routing_exception` via tests test_provide_automatic_options_attr, test_view_provide_automatic_options_attr
+- `src/flask/sansio/app.py` score 3.293, best symbol `sansio.app.App.trap_http_exception` via tests test_provide_automatic_options_attr, test_view_provide_automatic_options_attr
+- `src/flask/cli.py` score 3.003, best symbol `cli.routes_command`
 
 ## Blast radius of `sansio.app.App.add_url_rule` (8 callers within 3 hops)
 - app.Flask.__init__ → sansio.app.App.add_url_rule

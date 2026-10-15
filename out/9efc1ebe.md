@@ -3,12 +3,13 @@ Fixes #5472: Add support for partitioned session cookies
 Replays the upstream fix for this issue (commit 9efc1ebe) so the decision pipeline can be evaluated.
 
 ## Merge lane: **canary**
-Risk score **0.346** (weights: centrality 0.3, reach 0.25, coverage_gap 0.2, churn 0.15, reverts 0.1)
+Risk score **0.417** (weights: centrality 0.25, reach 0.2, import_reach 0.15, coverage_gap 0.2, churn 0.1, reverts 0.1)
 
 | signal | value | what it measures |
 |---|---|---|
-| centrality | 0.651 | PageRank percentile of the edited symbols over the call graph |
+| centrality | 0.63 | PageRank percentile of the edited symbols over the call graph |
 | reach | 0.482 | transitive callers within 3 hops (log scale) |
+| import_reach | 0.957 | share of other source files that import the edited files (4 levels) |
 | coverage_gap | 0.0 | share of edited symbols that no test executes |
 | churn | 0.2 | commits touching these files in the last year |
 | reverts | 0.0 | earlier changes to these files that were reverted |
@@ -19,9 +20,9 @@ Risk score **0.346** (weights: centrality 0.3, reach 0.25, coverage_gap 0.2, chu
 - `src/flask/sessions.py`: `sessions.SecureCookieSessionInterface.save_session`
 
 ## Why here (localization)
-- `src/flask/sessions.py` score 4.402, best symbol `sessions.SecureCookieSessionInterface.save_session` via tests test_session_using_session_settings, test_session_using_samesite_attribute
+- `src/flask/sessions.py` score 4.399, best symbol `sessions.SecureCookieSessionInterface.save_session` via tests test_session_using_session_settings, test_session_using_samesite_attribute
 - `src/flask/json/tag.py` score 3.0, best symbol `json.tag.TaggedJSONSerializer._untag_scan` via tests test_session_using_session_settings, test_session_using_samesite_attribute
-- `src/flask/app.py` score 2.633, best symbol `app.Flask.wsgi_app` via tests test_session_using_session_settings, test_session_using_samesite_attribute
+- `src/flask/app.py` score 2.625, best symbol `app.Flask.wsgi_app` via tests test_session_using_session_settings, test_session_using_samesite_attribute
 
 ## Blast radius of `sessions.SecureCookieSessionInterface.save_session` (5 callers within 3 hops)
 - app.Flask.process_response → sessions.SecureCookieSessionInterface.save_session

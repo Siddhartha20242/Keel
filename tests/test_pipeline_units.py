@@ -136,3 +136,30 @@ def test_triage_render_recommends_a_human_when_nothing_matches():
            "why": "Nothing in the code graph matches this report.", "tests": {}, "owners": [], "blast": {}, "memory": [], "risk": None}
     text = render(ctx)
     assert "needs human" in text and "keel:fix" in text and "Nothing in the code graph" in text
+
+
+def test_skeptic_findings_parse_and_reject_unknown_files():
+    text = ("1. Handler.do_POST calls shorten with unchecked input | file: src/shortener/server.py | test: test_post_rejects_huge_body\n"
+            "2. A caller may rely on the old dedupe | file: src/not/in/the/input.py | test: not a name\n"
+            "RISK: medium")
+    fs = skeptic.parse_findings(text, {"src/shortener/server.py"})
+    assert fs[0] == {"text": "Handler.do_POST calls shorten with unchecked input", "file": "src/shortener/server.py", "test": "test_post_rejects_huge_body"}
+    assert fs[1]["file"] is None and fs[1]["test"] is None                 # invented file and malformed test name are dropped
+    out = skeptic.render(fs)
+    assert "Suggested tests" in out and "`test_post_rejects_huge_body`" in out and "concern 1" in out
+
+
+def test_memory_cli_takes_findings_only_from_the_bots_skeptic_comment(tmp_path):
+    from keel import ledger
+    blob = {"id": "pr3", "pr": 3, "title": "t", "at": "2026-10-16", "symbols": ["a.b"], "files": ["src/a.py"], "tests_selected": 1, "new_failures": [],
+            "risk": 0.1, "lane": "canary", "skeptic_risk": "medium", "decision": "d", "level": "human", "graph_lane": "canary", "run": "1"}
+    real = [{"text": "x", "file": "src/a.py", "test": "test_x"}]
+    fake = [{"text": "evil", "file": None, "test": None}]
+    cs = [comment("github-actions[bot]", f"{MARK['report']}\n<!-- keel:data {json.dumps(blob)} -->", "2026-10-16T01:00:00Z", 1),
+          comment("github-actions[bot]", f"{MARK['skeptic']}\n<!-- keel:findings {json.dumps(real)} -->\nRISK: medium", "2026-10-16T00:00:00Z", 2),
+          comment("mallory", f"{MARK['skeptic']}\n<!-- keel:findings {json.dumps(fake)} -->\nRISK: low", "2026-10-17T00:00:00Z", 3)]
+    cf, mem, led = tmp_path / "c.json", tmp_path / "m.jsonl", tmp_path / "l.jsonl"
+    cf.write_text(json.dumps(cs))
+    memory_cli.main(["record", "--repo", "o/r", "--pr", "3", "--outcome", "merged", "--file", str(mem), "--ledger", str(led), "--comments-file", str(cf)])
+    skeptic_rec = [r for r in ledger.read(led) if r["kind"] == "skeptic"][0]
+    assert skeptic_rec["data"]["findings"] == real

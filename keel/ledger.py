@@ -69,7 +69,7 @@ def stage_entries(blob: dict, outcome: str) -> list[dict]:
          "summary": f"{len(blob['symbols'])} symbol(s) edited; graph selected {blob.get('tests_selected', 0)} tests; lane {blob['lane']}",
          "data": {"edited": blob["symbols"], "files": blob.get("files", []), "tests_selected": blob.get("tests_selected", 0),
                   "new_failures": blob.get("new_failures", []), "risk": blob["risk"], "lane": blob["lane"]}},
-        {**common, "kind": "skeptic", "actor": "github-actions[bot]", "summary": f"Skeptic verdict: RISK {blob['skeptic_risk']}", "data": {"risk": blob["skeptic_risk"]}},
+        {**common, "kind": "skeptic", "actor": "github-actions[bot]", "summary": f"Skeptic verdict: RISK {blob['skeptic_risk']}", "data": {"risk": blob["skeptic_risk"], "findings": blob.get("findings", [])}},
         {**common, "kind": "gate", "actor": "keel-risk-gate", "summary": blob.get("decision", "no decision recorded"),
          "data": {"level": blob.get("level", ""), "graph_lane": blob.get("graph_lane", blob["lane"])}},
         {**common, "kind": "outcome", "actor": "human", "summary": f"PR {outcome} by a person", "data": {"outcome": outcome, "title": blob.get("title", "")}},
@@ -96,6 +96,13 @@ def load_into_graph(db, repo: str, recs: list[dict]) -> str:
         if r["kind"] in ("skeptic", "gate", "outcome"):
             verdict = d.get("risk") or d.get("level") or d.get("outcome") or ""
             g.query("MATCH (a:AgentRun {seq: $seq}) CREATE (a)-[:PRODUCED]->(:Verdict {kind: $kind, value: $value})", {"seq": r["seq"], "kind": r["kind"], "value": str(verdict)})
+        for i, fd in enumerate(d.get("findings", [])):
+            g.query("MATCH (a:AgentRun {seq: $seq}) CREATE (n:Finding {pr: $pr, idx: $i, text: $text}) CREATE (a)-[:PRODUCED]->(n)",
+                    {"seq": r["seq"], "pr": r["pr"], "i": i, "text": fd.get("text", "")})
+            if fd.get("file"):
+                g.query("MATCH (n:Finding {pr: $pr, idx: $i}) MERGE (f:File {path: $f}) CREATE (n)-[:ABOUT]->(f)", {"pr": r["pr"], "i": i, "f": fd["file"]})
+            if fd.get("test"):
+                g.query("MATCH (n:Finding {pr: $pr, idx: $i}) MERGE (t:Test {name: $t}) CREATE (n)-[:SUGGESTS]->(t)", {"pr": r["pr"], "i": i, "t": fd["test"]})
         for f in d.get("files", []):
             g.query("MATCH (p:PullRequest {number: $pr}) MERGE (f:File {path: $f}) MERGE (p)-[:TOUCHES]->(f)", {"pr": r["pr"], "f": f})
         if prev is not None:

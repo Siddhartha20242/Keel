@@ -50,6 +50,9 @@ def load_code_graph(db, name, code, history, covers, meta):
         g.query("""UNWIND $rows AS r CREATE (:Test {id:r.qname, name:r.name, path:r.path, start:r.start, end:r.end, words:r.words})""", {"rows": b})
     g.query("MATCH (f:File), (s:Symbol {path:f.path}) CREATE (f)-[:CONTAINS]->(s)")
     g.query("MATCH (f:File), (t:Test {path:f.path}) CREATE (f)-[:CONTAINS_TEST]->(t)")
+    for b in _batches(code.get("imports", [])):
+        g.query("""UNWIND $rows AS r MATCH (a:File {path:r.src}), (b:File {path:r.dst})
+                   CREATE (a)-[:IMPORTS]->(b)""", {"rows": b})
     for b in _batches(code["calls"]):
         g.query("""UNWIND $rows AS r MATCH (a:Symbol {qname:r.src}), (b:Symbol {qname:r.dst})
                    CREATE (a)-[:CALLS {n:r.n, w:1}]->(b)""", {"rows": b})
@@ -89,7 +92,7 @@ def stats(g) -> dict:
     out = {}
     for label, q in [("symbols", "MATCH (n:Symbol) RETURN count(n)"), ("tests", "MATCH (n:Test) RETURN count(n)"),
                      ("files", "MATCH (n:File) RETURN count(n)"), ("commits", "MATCH (n:Commit) RETURN count(n)"),
-                     ("calls", "MATCH ()-[r:CALLS]->() RETURN count(r)"), ("covers", "MATCH ()-[r:COVERS]->() RETURN count(r)"),
+                     ("calls", "MATCH ()-[r:CALLS]->() RETURN count(r)"), ("imports", "MATCH ()-[r:IMPORTS]->() RETURN count(r)"), ("covers", "MATCH ()-[r:COVERS]->() RETURN count(r)"),
                      ("co_changed", "MATCH ()-[r:CO_CHANGED]->() RETURN count(r)")]:
         out[label] = g.ro_query(q).result_set[0][0]
     return out
