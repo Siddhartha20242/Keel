@@ -141,7 +141,10 @@ cannot take a parameter for its bound; `*0..` after `UNWIND` returns nothing; a 
 python -m keel.evaluate --rebuild               # builds 12 graphs (~5 s each), prints the table above
 python -m keel replay 4995a775                  # real fix as patch -> tests -> risk -> lane -> reviewers -> PR body
 python -m keel replay 4995a775 --mode mutant    # same, but deliberately broken: watch the gate and memory work
-python -m keel replay 4995a775 --mode llm       # Claude localizes, edits and tests (needs ANTHROPIC_API_KEY)
+python -m keel replay 4995a775 --mode llm       # an LLM localizes, edits and tests through the same tools
+#   Anthropic:                 ANTHROPIC_API_KEY=...  (default model claude-sonnet-5-5)
+#   any OpenAI-compatible API: OPENAI_API_KEY=... OPENAI_BASE_URL=https://... KEEL_MODEL=<model name>
+#   (OpenAI, Gemini, Groq, OpenRouter, Together, DeepSeek, Ollama all expose this interface)
 python scripts/replay_all.py                    # the lane table
 KEEL_CASE=e82db2ca python -m keel mcp           # the graph tools over MCP
 python -m pytest tests                          # 14 tests; the integration ones need FalkorDB and built graphs

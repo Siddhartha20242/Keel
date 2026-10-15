@@ -86,7 +86,7 @@ def decide_and_act(tb: Toolbox, case: dict, edited_syms: list[str], summary: str
             "tests_passed": tb.evidence.get("run", {}).get("passed"), "pr_body": body, "edited": qn, "recalled": len(recall.get("attempts", []))}
 
 
-def replay(db, case_id: str, mode: str = "oracle", rebuild=False, model="claude-sonnet-5-5", out_dir: pathlib.Path | None = None) -> dict:
+def replay(db, case_id: str, mode: str = "oracle", rebuild=False, model=None, out_dir: pathlib.Path | None = None, provider=None) -> dict:
     case = load_case(case_id)
     name = G.code_graph_name("flask", case_id)
     if rebuild or name not in db.list_graphs():
@@ -112,7 +112,7 @@ def replay(db, case_id: str, mode: str = "oracle", rebuild=False, model="claude-
         res = decide_and_act(tb, case, edited, summary, extra_test_files=case["truth_tests"], baseline_failures=baseline)
     else:
         from .llm_agent import run_agent
-        res = run_agent(tb, case, text, model=model)
+        res = run_agent(tb, case, text, model=model, provider=provider)
     res["case"] = case_id
     res["trace"] = tb.trace
     if out_dir:

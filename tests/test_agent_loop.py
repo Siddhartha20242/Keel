@@ -38,10 +38,44 @@ def test_loop_edits_runs_tests_then_gate_decides():
         [("finish", {"summary": "Touched `flask.testing.FlaskClient.open` and also `Flask.auth_gateway`."})],
     ]
     try:
-        res = run_agent(tb, case, case["title"], client=FakeClient(script))
+        res = run_agent(tb, case, case["title"], client=FakeClient(script), provider="anthropic")
     finally:
         A.reset_worktree(wd)
     assert res["edited"] == ["flask.testing.FlaskClient.open"]
     assert res["lane"] in ("auto_merge", "canary", "human_review")
     assert "auth_gateway" in res["pr_body"] and "rejected" in res["pr_body"]      # invented name caught, flat summary used
     assert any(t["tool_query"] == "resolve_symbols" for t in tb.trace)
+
+
+class FakeOpenAI:
+    """Mimics the OpenAI chat-completions client for the same script."""
+    def __init__(self, script):
+        import json
+        self.script, self.i, self.json = script, 0, json
+        self.chat = types.SimpleNamespace(completions=self)
+
+    def create(self, **kw):
+        step = self.script[self.i]; self.i += 1
+        calls = [types.SimpleNamespace(id=f"c{self.i}_{k}", function=types.SimpleNamespace(name=n, arguments=self.json.dumps(a))) for k, (n, a) in enumerate(step)]
+        return types.SimpleNamespace(choices=[types.SimpleNamespace(message=types.SimpleNamespace(content="", tool_calls=calls))])
+
+
+def test_openai_compatible_provider_runs_same_loop():
+    try:
+        db = G.connect(); db.list_graphs()
+    except Exception:
+        pytest.skip("FalkorDB not running")
+    if G.code_graph_name("flask", CASE) not in db.list_graphs():
+        pytest.skip("graph not built")
+    case = A.load_case(CASE); wd = P.checkout(CASE, case["parent"])
+    tb = Toolbox(db, "flask", CASE, wd, now="2025-08-18")
+    script = [
+        [("localize", {"issue_text": case["title"]})],
+        [("edit_file", {"path": "src/flask/testing.py", "old": "    def open(", "new": "    # keel fake-agent edit\n    def open("})],
+        [("finish", {"summary": "Edited `flask.testing.FlaskClient.open`."})],
+    ]
+    try:
+        res = run_agent(tb, case, case["title"], client=FakeOpenAI(script), provider="openai", model="any")
+    finally:
+        A.reset_worktree(wd)
+    assert res["edited"] == ["flask.testing.FlaskClient.open"] and "rejected" not in res["pr_body"]

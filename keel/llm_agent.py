@@ -36,33 +36,90 @@ def _dispatch(tb: Toolbox, name: str, a: dict) -> dict:
         return {"outcome": "error", "note": f"missing argument {e}"}
 
 
-def run_agent(tb: Toolbox, case: dict, issue_text: str, model: str = "claude-sonnet-5-5", client=None) -> dict:
+class _Anthropic:
+    """Normalises Anthropic's tool-use messages to (tool_calls, append_results)."""
+    def __init__(self, model, client=None):
+        if client is None:
+            import anthropic
+            client = anthropic.Anthropic()
+        self.c, self.model = client, model
+        self.tools = [{**t} for t in GRAPH_TOOLS + ACTION_TOOLS]
+
+    def start(self, user):
+        self.msgs = [{"role": "user", "content": user}]
+
+    def step(self):
+        r = self.c.messages.create(model=self.model, max_tokens=4000, system=SYSTEM, tools=self.tools, messages=self.msgs)
+        self.msgs.append({"role": "assistant", "content": r.content})
+        return [{"id": b.id, "name": b.name, "input": b.input} for b in r.content if b.type == "tool_use"]
+
+    def results(self, outs):
+        self.msgs.append({"role": "user", "content": [{"type": "tool_result", "tool_use_id": i, "content": c} for i, c in outs]})
+
+
+class _OpenAICompatible:
+    """Any OpenAI-compatible chat-completions endpoint (OpenAI, Gemini, Groq, OpenRouter, Together, DeepSeek, Ollama...).
+    Configure with OPENAI_API_KEY, OPENAI_BASE_URL and KEEL_MODEL."""
+    def __init__(self, model, client=None):
+        if client is None:
+            import openai
+            client = openai.OpenAI()
+        self.c, self.model = client, model
+        self.tools = [{"type": "function", "function": {"name": t["name"], "description": t["description"], "parameters": t["input_schema"]}}
+                      for t in GRAPH_TOOLS + ACTION_TOOLS]
+
+    def start(self, user):
+        self.msgs = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}]
+
+    def step(self):
+        r = self.c.chat.completions.create(model=self.model, tools=self.tools, messages=self.msgs)
+        m = r.choices[0].message
+        calls = m.tool_calls or []
+        self.msgs.append({"role": "assistant", "content": m.content or "",
+                          **({"tool_calls": [{"id": c.id, "type": "function", "function": {"name": c.function.name, "arguments": c.function.arguments}} for c in calls]} if calls else {})})
+        out = []
+        for c in calls:
+            try:
+                args = json.loads(c.function.arguments or "{}")
+            except json.JSONDecodeError:
+                args = {}
+            out.append({"id": c.id, "name": c.function.name, "input": args})
+        return out
+
+    def results(self, outs):
+        for i, c in outs:
+            self.msgs.append({"role": "tool", "tool_call_id": i, "content": c})
+
+
+def make_provider(provider: str | None, model: str | None, client=None):
+    import os
+    provider = provider or os.environ.get("KEEL_PROVIDER") or ("openai" if os.environ.get("OPENAI_API_KEY") else "anthropic")
+    if provider == "anthropic":
+        return _Anthropic(model or os.environ.get("KEEL_MODEL", "claude-sonnet-5-5"), client)
+    return _OpenAICompatible(model or os.environ.get("KEEL_MODEL", "gpt-4o"), client)
+
+
+def run_agent(tb: Toolbox, case: dict, issue_text: str, model: str | None = None, client=None, provider: str | None = None) -> dict:
     from .agent import decide_and_act
-    if client is None:
-        import anthropic
-        client = anthropic.Anthropic()
-    tools = GRAPH_TOOLS + ACTION_TOOLS
-    msgs = [{"role": "user", "content": f"Issue #{case['issue_number']}: {issue_text}"}]
+    p = make_provider(provider, model, client)
+    p.start(f"Issue #{case['issue_number']}: {issue_text}")
     summary = ""
     for _ in range(MAX_STEPS):
-        resp = client.messages.create(model=model, max_tokens=4000, system=SYSTEM, tools=tools, messages=msgs)
-        msgs.append({"role": "assistant", "content": resp.content})
-        uses = [b for b in resp.content if b.type == "tool_use"]
+        uses = p.step()
         if not uses:
             break
-        results, done = [], False
+        outs, done = [], False
         for u in uses:
-            if u.name == "finish":
-                summary, done = u.input.get("summary", ""), True
-                results.append({"type": "tool_result", "tool_use_id": u.id, "content": "ok"})
+            if u["name"] == "finish":
+                summary, done = u["input"].get("summary", ""), True
+                outs.append((u["id"], "ok"))
                 continue
-            out = _dispatch(tb, u.name, u.input)
-            results.append({"type": "tool_result", "tool_use_id": u.id, "content": json.dumps(out, default=str)[:12000]})
-        msgs.append({"role": "user", "content": results})
+            outs.append((u["id"], json.dumps(_dispatch(tb, u["name"], u["input"]), default=str)[:12000]))
+        p.results(outs)
         if done:
             break
     edited = [q for qs in tb.edited.values() for q in qs]
-    ok, why = accepts(summary, {q for fl in tb.evidence.get("localize", {}).get("files", []) for s in fl["symbols"] for q in [s["symbol"]]} | set(edited),
+    ok, why = accepts(summary, {s["symbol"] for fl in tb.evidence.get("localize", {}).get("files", []) for s in fl["symbols"]} | set(edited),
                       {f["file"] for f in tb.evidence.get("localize", {}).get("files", [])} | set(tb.edited))
     if not ok or not summary:
         summary = ("Edited " + ", ".join(f"`{q}`" for q in edited) + ".") if edited else "No edit was made."

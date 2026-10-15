@@ -12,3 +12,4 @@ blinker
 markupsafe
 asgiref
 python-dotenv
+openai>=1.50
