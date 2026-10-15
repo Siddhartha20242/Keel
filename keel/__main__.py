@@ -1,8 +1,10 @@
 """python -m keel replay <case> [--mode oracle|llm] | eval | cases | mcp"""
 import argparse, json, pathlib, sys
+from dotenv import load_dotenv
 from . import graph as G, agent as A
 
 def main():
+    load_dotenv(pathlib.Path(__file__).resolve().parents[1] / ".env")   # API keys live here, never in git
     ap = argparse.ArgumentParser(prog="keel")
     sub = ap.add_subparsers(dest="cmd", required=True)
     r = sub.add_parser("replay"); r.add_argument("case"); r.add_argument("--mode", default="oracle", choices=["oracle", "mutant", "llm"])

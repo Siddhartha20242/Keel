@@ -143,7 +143,7 @@ python -m keel replay 4995a775                  # real fix as patch -> tests -> 
 python -m keel replay 4995a775 --mode mutant    # same, but deliberately broken: watch the gate and memory work
 python -m keel replay 4995a775 --mode llm       # an LLM localizes, edits and tests through the same tools
 #   Anthropic:                 ANTHROPIC_API_KEY=...  (default model claude-sonnet-5-5)
-#   any OpenAI-compatible API: OPENAI_API_KEY=... OPENAI_BASE_URL=https://... KEEL_MODEL=<model name>
+#   any OpenAI-compatible API: put OPENAI_API_KEY / OPENAI_BASE_URL / KEEL_MODEL in .env (copy .env.example; .env is gitignored)
 #   (OpenAI, Gemini, Groq, OpenRouter, Together, DeepSeek, Ollama all expose this interface)
 python scripts/replay_all.py                    # the lane table
 KEEL_CASE=e82db2ca python -m keel mcp           # the graph tools over MCP
@@ -155,10 +155,14 @@ Pointing Keel at a different Python repo means changing `targets/` and `pipeline
 
 ## Limitations
 
-* **`--mode llm` is implemented and its loop is tested with a scripted fake client, but it has not been run against the
-  live API in this build** (no key was available while building). The evaluation numbers come from the oracle mode
-  (real fix as the patch), which isolates the graph's decisions from the model's patch quality. They say nothing about
-  how good Claude's patches are.
+* **`--mode llm` has been run live once**, on Groq `openai/gpt-oss-120b` via the OpenAI-compatible adapter, on issue #5774
+  (`stream_with_context` with async routes). What happened, unedited: the first run's patch failed the graph-selected
+  tests and was routed to `human_review`; the second run only changed type annotations (it did **not** fix the bug), the
+  tests passed, and the lane was still forced to `human_review` because memory held the earlier failed attempt on the
+  same symbol. So the gate, test selection and memory behave as designed, but the model's patch quality was poor, and
+  passing tests did not mean the issue was fixed (no existing test exercised the bug). **Keel gates how risky a change
+  is to merge; it does not verify that the change is correct.** One model, one issue, two runs: no claim about patch
+  quality beyond that. The evaluation numbers above come from oracle mode (the real fix as the patch).
 * The call graph is static: dynamic dispatch, decorators and `getattr` are invisible, so blast radius can be
   incomplete. Ambiguous attribute calls (>3 candidates) get no edge rather than a wrong one.
 * Per-test coverage is function-level, so "covered" means "executed", not "asserted".

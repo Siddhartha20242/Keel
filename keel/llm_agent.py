@@ -1,6 +1,6 @@
 """Claude drives localize -> edit -> test; the merge gate is NOT in the model's hands (decide_and_act runs after `finish`)."""
 from __future__ import annotations
-import json, time
+import json, subprocess, time
 from .specs import GRAPH_TOOLS, ACTION_TOOLS, VALID
 from .pr import accepts
 from .tools import Toolbox
@@ -85,7 +85,8 @@ class _OpenAICompatible:
         self.msgs = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}]
 
     def step(self):
-        r = self.c.chat.completions.create(model=self.model, tools=self.tools, messages=self.msgs)
+        extra = {"reasoning_effort": "low"} if "gpt-oss" in self.model else {}     # keep reasoning out of the reply
+        r = self.c.chat.completions.create(model=self.model, tools=self.tools, messages=self.msgs, temperature=0, **extra)
         m = r.choices[0].message
         calls = m.tool_calls or []
         self.msgs.append({"role": "assistant", "content": m.content or "",
@@ -126,9 +127,9 @@ def run_agent(tb: Toolbox, case: dict, issue_text: str, model: str | None = None
         except Exception as e:                      # provider errors: recover where it makes sense, otherwise say why
             msg = str(e)
             code = getattr(e, "status_code", None)
-            if code == 400 and ("tool" in msg.lower()) and nudges < 3:
-                nudges += 1                         # the model called a tool that does not exist: tell it the real ones
-                p.nudge(f"That tool call was invalid. Use only these tools: {', '.join(VALID)}.")
+            if code == 400 and any(k in msg.lower() for k in ("tool", "parse", "failed_generation")) and nudges < 6:
+                nudges += 1                         # bad tool name, or prose where a tool call belonged: say what is valid and retry
+                p.nudge(f"Your last reply was not a valid tool call. Reply with exactly one tool call and no prose. Valid tools: {', '.join(VALID)}.")
                 continue
             if code in (429, 503) and waits < 3:
                 waits += 1; time.sleep(8 * waits); continue
@@ -153,4 +154,19 @@ def run_agent(tb: Toolbox, case: dict, issue_text: str, model: str | None = None
     if not ok or not summary:
         summary = ("Edited " + ", ".join(f"`{q}`" for q in edited) + ".") if edited else "No edit was made."
         summary += f" (model summary rejected: {why})" if not ok and summary else ""
-    return decide_and_act(tb, case, edited, summary, extra_test_files=[])
+    # Baseline: run the same selected tests on the pristine parent so pre-existing failures do not count against the patch.
+    from .agent import reset_worktree, _git
+    baseline: set = set()
+    diff = _git(tb.workdir, "diff", "--", "src", "tests").stdout
+    if edited and diff:
+        qn, _ = tb.resolve(edited)
+        sel = tb.impacted_tests(qn, depth=2, limit=40)
+        reset_worktree(tb.workdir)
+        baseline = set(tb.run_tests([t["test"] for t in sel["tests"]])["failed"])
+        tb.evidence.pop("run", None)
+        subprocess.run(["git", "apply", "-"], cwd=tb.workdir, input=diff, text=True, check=True)
+    res = decide_and_act(tb, case, edited, summary, baseline_failures=baseline)
+    if diff:
+        res["diff"] = diff
+        res["pr_body"] = res["pr_body"].replace("\n## Why here (localization)", "\n## Diff written by the model\n```diff\n" + diff[:3500] + "\n```\n\n## Why here (localization)", 1)
+    return res
