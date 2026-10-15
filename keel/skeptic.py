@@ -23,6 +23,7 @@ def facts(ctx: dict) -> str:
     lines = [
         f"PR: {ctx['title']}",
         f"Edited symbols: {', '.join(ctx['edited']) or 'none'}",
+        f"Files touched (use these exact paths in `file:`): {', '.join(ctx.get('files', [])) or 'none'}",
         f"New source files: {', '.join(ctx['new_files']) or 'none'}; tests changed in this PR: {', '.join(ctx['changed_tests']) or 'none'}",
         f"Tests: graph selected {t['selected']} of {t['suite']}; ran {t['ran']}; new failures: {', '.join(t['new_failures']) or 'none'}",
         f"Risk score {ctx['risk']['score']} (lane {ctx['risk']['lane']}); components {json.dumps(ctx['risk']['components'])}",
@@ -97,7 +98,8 @@ def review(ctx: dict) -> tuple[str, str, list[dict]]:
     risk = m[-1].group(1).lower() if m else "unknown"
     body = RISK_RE.sub("", text).strip()
     findings = parse_findings(body, set(ctx.get("files", [])) | set(ctx["new_files"]) | set(ctx["changed_tests"]))
-    shown = render(findings) if findings else body
+    # no findings parsed (e.g. "No functional change"): show the model's words without the machine-readable `| file: | test:` tail
+    shown = render(findings) if findings else re.sub(r"\s*\|\s*file:.*$", "", body, flags=re.M)
     unknown = sorted({t for t in TICK.findall(body) if t not in known_names(ctx)})
     note = f"\n\n_Names the graph and diff do not contain, treat with care: {', '.join('`'+u+'`' for u in unknown)}._" if unknown else ""
     # the findings travel with the comment (hidden JSON) so the audit ledger can store them as Finding nodes later

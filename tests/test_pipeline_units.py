@@ -163,3 +163,9 @@ def test_memory_cli_takes_findings_only_from_the_bots_skeptic_comment(tmp_path):
     memory_cli.main(["record", "--repo", "o/r", "--pr", "3", "--outcome", "merged", "--file", str(mem), "--ledger", str(led), "--comments-file", str(cf)])
     skeptic_rec = [r for r in ledger.read(led) if r["kind"] == "skeptic"][0]
     assert skeptic_rec["data"]["findings"] == real
+
+
+def test_skeptic_facts_list_exact_file_paths_and_clean_non_findings():
+    ctx = {**CTX, "files": ["src/shortener/store.py"], "memory": []}
+    assert "src/shortener/store.py" in skeptic.facts(ctx)
+    assert skeptic.parse_findings("1. No functional change | file: src/shortener/store.py | test: test_x", {"src/shortener/store.py"}) == []
