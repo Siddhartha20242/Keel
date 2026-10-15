@@ -3,3 +3,4 @@ coverage>=7
 pytest==8.3.5
 openai>=1.50
 anthropic>=0.40
+python-dotenv

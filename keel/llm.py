@@ -4,6 +4,11 @@ from __future__ import annotations
 import os, time
 
 
+def have_key() -> bool:
+    provider = os.environ.get("KEEL_PROVIDER") or ("openai" if os.environ.get("OPENAI_API_KEY") else "anthropic")
+    return bool(os.environ.get("ANTHROPIC_API_KEY" if provider == "anthropic" else "OPENAI_API_KEY"))
+
+
 class LLMUnavailable(Exception):
     pass
 

@@ -6,9 +6,13 @@ It never merges; a failed attempt becomes a comment on the issue.
 """
 from __future__ import annotations
 import argparse, pathlib, shutil, subprocess, tempfile
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+except ImportError:          # CI passes keys through the environment
+    load_dotenv = lambda *_a, **_k: None
 from . import graph as G, pipeline as P
 from .ghio import _gh, upsert_comment
+from .llm import have_key
 from .llm_agent import run_agent
 from .memory_io import load_into_graph, read_records
 from .tools import Toolbox
@@ -62,7 +66,21 @@ def main(argv=None):
     ap.add_argument("--kind", choices=["issue", "ci"], default="issue"); ap.add_argument("--base-branch", default="main"); ap.add_argument("--branch")
     a = ap.parse_args(argv)
     body = pathlib.Path(a.body_file).read_text() if a.body_file else ""
-    res = fix(a.repo_dir, a.subdir, a.sha, a.issue, a.title, body, a.memory, kind=a.kind)
+    if not have_key():          # say so where the person will look, instead of crashing the job
+        msg = "The agent could not run: no model key is configured, so no fix was attempted. A person needs to look at this."
+        print(msg)
+        if a.repo and not a.dry_run:
+            upsert_comment(a.repo, a.issue, "triage", f"### Agent attempt\n\n{msg}")
+        return
+    try:
+        res = fix(a.repo_dir, a.subdir, a.sha, a.issue, a.title, body, a.memory, kind=a.kind)
+    except Exception as e:      # provider limits and outages are normal: say what happened where the person will look
+        name = type(e).__name__
+        msg = (f"The agent could not finish ({name}: {str(e)[:160]}). No change was made. A person needs to look at this.")
+        print(msg)
+        if a.repo and not a.dry_run:
+            upsert_comment(a.repo, a.issue, "triage", f"### Agent attempt\n\n{msg}")
+        return
     try:
         diff, passed = res.get("diff", ""), res.get("tests_passed")
         print(res["pr_body"])

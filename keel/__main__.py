@@ -1,6 +1,9 @@
 """python -m keel replay <case> [--mode oracle|llm] | eval | cases | mcp"""
 import argparse, json, pathlib, sys
-from dotenv import load_dotenv
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    load_dotenv = lambda *_a, **_k: None
 from . import graph as G, agent as A
 
 def main():
