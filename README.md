@@ -25,8 +25,29 @@ and whether an earlier attempt on the same code failed. The agent only picks fro
 Cypher, and a symbol name it invents returns `unknown_symbol` without running anything. After it finishes, a failing
 test, an untested change or a failed earlier attempt can only move the PR toward human review.
 
-Three modes: `oracle` applies the real upstream fix as the patch, `mutant` applies it and then breaks it on purpose, and
+Three modes of the replay tool: `oracle` applies the real upstream fix as the patch, `mutant` applies it and then breaks it on purpose, and
 `llm` lets a model do the localizing, editing and testing. The tools are also exposed over MCP.
+
+## The pull request pipeline
+
+Keel also runs as a GitHub Actions pipeline around a small app, a URL shortener in `demo-app/` (standard library only, in
+memory, so a restart wipes it). The agents can comment but cannot approve, merge or edit, so a human keeps the final say.
+
+On each pull request that touches the app, `.github/workflows/pr.yml` runs the unit tests, builds the container image and an
+SBOM, runs CodeQL, gitleaks and `pip-audit`, and smoke tests the image. A job called `analyze` builds the graph from the PR's
+base commit, maps the diff onto it, runs the tests the graph selects on base and on head (only failures the PR introduces
+count), and scores the risk.
+
+Then three jobs run in order. The Skeptic reads the diff and the graph facts and posts one review: a few ways the change
+could break, then a final `RISK: low`, `medium` or `high` line. The `risk-gate` job reads that verdict, ignores any comment
+that is not from `github-actions[bot]`, and fails only on `RISK: high` or on tests the PR broke. If there is no review it
+says so and asks for a human; it does not pass silently. The Reporter posts a status note that quotes both and lists what a
+person still has to decide. When the PR closes, `memory.yml` records whether it merged or was rejected in a JSONL file on a
+`keel-memory` branch, and the next analysis recalls it.
+
+After a human merges, `main.yml` builds the image, runs it, smoke tests it, and pushes it to the GitHub container registry.
+It also builds and smoke tests it every hour. There is no hosted service: the "live" check is the container started inside
+the runner.
 
 ## Results
 
