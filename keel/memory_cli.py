@@ -3,6 +3,7 @@
 from __future__ import annotations
 import argparse, json, pathlib, re
 from .ghio import MARK, latest_trusted, list_comments
+from . import ledger
 from .memory_io import append_record
 
 DATA = re.compile(r"<!-- keel:data (\{.*?\}) -->", re.S)
@@ -14,7 +15,7 @@ def main(argv=None):
     r = sub.add_parser("record")
     r.add_argument("--repo", required=True); r.add_argument("--pr", required=True)
     r.add_argument("--outcome", required=True, choices=["merged", "rejected"]); r.add_argument("--file", required=True)
-    r.add_argument("--comments-file")
+    r.add_argument("--comments-file"); r.add_argument("--ledger")
     a = ap.parse_args(argv)
     comments = json.loads(pathlib.Path(a.comments_file).read_text()) if a.comments_file else list_comments(a.repo, a.pr)
     c = latest_trusted(comments, MARK["report"])
@@ -27,6 +28,13 @@ def main(argv=None):
     pathlib.Path(a.file).parent.mkdir(parents=True, exist_ok=True)
     append_record(pathlib.Path(a.file), rec)
     print(f"recorded {rec['id']}: {a.outcome} ({len(rec.get('symbols', []))} symbols)")
+    if a.ledger:
+        pathlib.Path(a.ledger).parent.mkdir(parents=True, exist_ok=True)
+        ok, msg = ledger.verify(ledger.read(a.ledger))
+        if not ok:
+            raise SystemExit(f"refusing to extend a broken ledger: {msg}")
+        added = ledger.append(a.ledger, ledger.stage_entries(rec, a.outcome))
+        print(f"ledger: appended {len(added)} records, head {added[-1]['hash'][:16]}")
 
 
 if __name__ == "__main__":

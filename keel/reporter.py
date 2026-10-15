@@ -3,7 +3,7 @@ lists the graph's evidence, and says what a person still has to decide. It canno
 Everything decision-relevant is built from facts; a model (if available) only adds a short plain-language summary, and that
 summary is dropped if it names code that is not in the facts."""
 from __future__ import annotations
-import argparse, json, pathlib, re
+import argparse, json, os, pathlib, re
 from .ghio import upsert_comment
 from .llm import LLMUnavailable, complete
 from .skeptic import known_names
@@ -36,6 +36,9 @@ def still_to_decide(ctx: dict, decision: dict) -> list[str]:
     bad = [a for a in ctx["memory"] if a["outcome"] in ("failed_tests", "rejected", "reverted")]
     if bad:
         items.append(f"Why an earlier attempt on this code ended in `{bad[0]['outcome']}` ({bad[0]['at']}), and whether this PR avoids that.")
+    if ctx.get("changes_with"):
+        items.append("Whether these files, which usually change together with this PR's files, also need a change: "
+                     + ", ".join(f"`{p}`" for p in ctx["changes_with"][:4]) + ".")
     if ctx["reviewers"]:
         items.append("Who reviews: the people who have changed this code are " + ", ".join(r["person"] for r in ctx["reviewers"]) + ".")
     items.append("Whether this ships at all. Nothing in this pipeline merges.")
@@ -59,6 +62,9 @@ def build(ctx: dict, decision: dict, skeptic_body: str | None) -> str:
     for sym, b in list(ctx["blast"].items())[:2]:
         if b["routes"]:
             L.append(f"Blast radius of `{short(sym)}`: " + "; ".join(" -> ".join(short(x) for x in rt) for rt in b["routes"][:3]))
+    led = ctx.get("ledger")
+    if led:
+        L += ["", f"Audit ledger: {'intact' if led['ok'] else '**BROKEN, do not trust earlier records**'} ({led['msg']})."]
     L += ["", "**What a human still has to decide**", ""] + [f"- {i}" for i in still_to_decide(ctx, decision)]
     return "\n".join(L)
 
@@ -88,7 +94,9 @@ def main(argv=None):
     s = summary(ctx)
     if s:
         body = body.replace("| evidence | value |", f"{s}\n\n| evidence | value |", 1)
-    data = {"id": f"pr{ctx['pr']}", "title": ctx["title"], "summary": s or ctx["title"], "lane": ctx["risk"]["lane"], "risk": ctx["risk"]["score"],
+    data = {"id": f"pr{ctx['pr']}", "pr": int(ctx["pr"]) if str(ctx["pr"]).isdigit() else 0, "files": ctx.get("files", []),
+            "tests_selected": ctx["tests"]["selected"], "new_failures": ctx["tests"]["new_failures"], "decision": decision["decision"],
+            "level": decision["level"], "graph_lane": decision["graph_lane"], "run": os.environ.get("GITHUB_RUN_ID", ""), "title": ctx["title"], "summary": s or ctx["title"], "lane": ctx["risk"]["lane"], "risk": ctx["risk"]["score"],
             "symbols": ctx["edited"], "at": ctx["at"], "skeptic_risk": decision["skeptic_risk"]}
     body += f"\n\n<!-- keel:data {json.dumps(data, sort_keys=True)} -->"
     print(body)

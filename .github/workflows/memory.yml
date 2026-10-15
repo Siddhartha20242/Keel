@@ -36,12 +36,16 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           OUTCOME: ${{ github.event.pull_request.merged && 'merged' || 'rejected' }}
-        run: python -m keel.memory_cli record --repo "${{ github.repository }}" --pr "${{ github.event.pull_request.number }}" --outcome "$OUTCOME" --file mem/memory.jsonl
+        run: python -m keel.memory_cli record --repo "${{ github.repository }}" --pr "${{ github.event.pull_request.number }}" --outcome "$OUTCOME" --file mem/memory.jsonl --ledger mem/ledger.jsonl
       - name: push
         working-directory: mem
+        env:
+          PYTHONPATH: ${{ github.workspace }}
         run: |
           [ -f memory.jsonl ] || { echo "nothing to record"; exit 0; }
-          git add memory.jsonl
+          python -m keel.ledger verify --file ledger.jsonl | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "ledger head: $(tail -n1 ledger.jsonl | python -c 'import sys,json; print(json.loads(sys.stdin.read())["hash"])')" | tee -a "$GITHUB_STEP_SUMMARY"
+          git add memory.jsonl ledger.jsonl
           git diff --cached --quiet && exit 0
           git commit -qm "record PR ${{ github.event.pull_request.number }}: ${{ github.event.pull_request.merged && 'merged' || 'rejected' }}"
           for i in 1 2 3; do

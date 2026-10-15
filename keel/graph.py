@@ -72,6 +72,12 @@ def load_code_graph(db, name, code, history, covers, meta):
     for b in _batches(history["cochange"]):
         g.query("""UNWIND $rows AS r MATCH (a:File {path:r.a}), (b:File {path:r.b})
                    CREATE (a)-[:CO_CHANGED {n:r.n}]->(b)""", {"rows": b})
+    if history["cochange"]:
+        # strong co-change = at least 35% of the strongest pair (floor 3): WCC over these finds files that really move together
+        thr = max(3, round(0.35 * max(r["n"] for r in history["cochange"])))
+        for b in _batches([r for r in history["cochange"] if r["n"] >= thr]):
+            g.query("""UNWIND $rows AS r MATCH (a:File {path:r.a}), (b:File {path:r.b})
+                       CREATE (a)-[:CO_STRONG {n:r.n}]->(b)""", {"rows": b})
     g.query("MATCH (t:Test) SET t.breadth = 0")
     g.query("MATCH (t:Test)-[c:COVERS]->() WITH t, count(c) AS b SET t.breadth = b")
     # algorithm results are persisted on the nodes so risk queries can read them cheaply

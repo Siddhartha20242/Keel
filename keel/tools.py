@@ -197,6 +197,18 @@ class Toolbox:
         rows = self._ro(self.g, "load_bearing", {"limit": max(1, min(int(limit), 20))}, ("symbol", "file", "score"))
         return {"outcome": "answered_with_path", "symbols": [{**r, "score": round(r["score"], 4)} for r in rows]}
 
+    def changes_with(self, files: list[str], limit: int = 6) -> dict:
+        """Files that strongly tend to change together with `files` (weakly connected components of CO_STRONG), minus `files`."""
+        comps = self._ro(self.g, "clusters", {}, ("component", "files", "size"))
+        mine = set(files)
+        partners: list[str] = []
+        for c in comps:
+            if c["size"] > 1 and mine & set(c["files"]):
+                partners += [f for f in c["files"] if f not in mine and f not in partners]
+        if not partners:
+            return {"outcome": "not_in_graph", "note": "No strong co-change cluster contains these files."}
+        return {"outcome": "answered_with_path", "partners": partners[:limit]}
+
     def list_symbols(self, file: str = "", limit: int = 40) -> dict:
         rows = self._ro(self.g, "list_symbols", {"file": file or "", "limit": max(1, min(int(limit), 80))}, ("symbol", "file"))
         if not rows:

@@ -25,6 +25,9 @@
 | Triage on a realistic issue | `python -m keel.triage --dry-run` locally | recommends "agent can try", points at `store.py`/`codes.py`, 10 of 12 tests, risk 0.277 |
 | Fix agent on a realistic issue (dry run, Groq `gpt-oss-120b`) | `python -m keel.fix --dry-run` locally | `localize` found nothing, the agent browsed with `list_symbols`, edited `normalize_url`, 7 selected tests passed, lane auto_merge. The diff is a correct minimal fix. No branch or PR was created |
 
+| Audit ledger: hash chain, tamper detection, graph walk | `python -m pytest tests/test_ledger.py`, `python -m keel.ledger explain` | editing a record or removing one is detected and the chain reports where it breaks; `explain` lists all four actions behind a PR through FalkorDB. Sample data is from locally simulated PRs |
+| Co-change clusters (WCC over strong co-change) | on the Flask graph | `app.py` pulls in `blueprints.py`, `helpers.py`, `testing.py`; `json/tag.py` has no cluster. The threshold is a heuristic (35% of the strongest pair, floor 3) |
+
 ## Written, but not run
 - `issue.yml`, `fix.yml` and the `incident` job on GitHub: they run on issue events and need real issues. Opening a draft PR
   needs the repo setting "Allow GitHub Actions to create pull requests"; a PR opened with the default token does not start
@@ -44,6 +47,9 @@
 - Opening a real pull request from the replay tool: it writes a description to `out/` and stops.
 
 ## Known weaknesses
+- The audit ledger is tamper-evident, not tamper-proof: a person with write access to the `keel-memory` branch could rewrite the
+  whole chain consistently. Nothing outside the repo anchors the head hash.
+- In `memory.yml` the ledger is appended when a PR closes, so a PR that is never closed has no ledger records yet.
 - Passing tests do not mean the issue is fixed (see the live run above).
 - The call graph is static, so dynamic dispatch is invisible and blast radius can be incomplete.
 - Risk weights and lane thresholds are hand-set. There is no ground truth to score lanes against.

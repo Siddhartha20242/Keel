@@ -11,6 +11,7 @@ import argparse, json, pathlib, shutil, subprocess, sys, tempfile
 from . import graph as G, pipeline as P, risk
 from .diffmap import changed_paths, parse_hunks, symbols_from_hunks
 from .extract import extract_code
+from . import ledger as L
 from .memory_io import load_into_graph, read_records
 from .tools import Toolbox
 
@@ -72,8 +73,14 @@ def analyze(repo_dir, subdir, base, head, pr, title, out_dir, memory_file=None, 
             lane = "human_review" if lane == "human_review" else "canary"
             why.append(f"new source file(s) {', '.join(new_src)} have no tests in this PR")
         rv = tb.reviewers(edited) if edited else {"reviewers": []}
+        cw = tb.changes_with([f for f in files if f.startswith("src/")]) if files else {"outcome": "not_in_graph"}
 
+        sym_path = {s["qname"]: s["path"] for s in code["symbols"]}
+        files = sorted({sym_path[q] for q in edited if q in sym_path} | set(new_src))
+        led_path = pathlib.Path(memory_file).with_name("ledger.jsonl") if memory_file else None
+        led_ok, led_msg = L.verify(L.read(led_path)) if led_path else (True, "no ledger yet")
         ctx = {
+            "files": files, "ledger": {"ok": led_ok, "msg": led_msg},
             "pr": pr, "title": title, "base": base, "head": head, "at": day,
             "edited": edited, "new_files": new_src, "changed_tests": test_files, "deleted": paths["deleted"],
             "graph": {"stats": stats, "memory_records": mem_n},
@@ -83,6 +90,7 @@ def analyze(repo_dir, subdir, base, head, pr, title, out_dir, memory_file=None, 
             "blast": {s: {"total": b.get("total", 0), "routes": [c["via"] for c in b.get("callers", [])[:5]], "outcome": b["outcome"]}
                       for s, b in blast.items()},
             "reviewers": rv.get("reviewers", [])[:3],
+            "changes_with": [p for p in cw.get("partners", []) if p not in files and p not in test_files],
             "memory": recall.get("attempts", []),
             "diff": full_diff[:DIFF_CHARS], "diff_truncated": len(full_diff) > DIFF_CHARS,
             "trace": tb.trace[-40:],

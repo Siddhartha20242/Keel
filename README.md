@@ -44,6 +44,13 @@ Three modes of the replay tool: `oracle` applies the real upstream fix as the pa
 | Monitor | `main.yml` every hour: build from main and smoke test again | |
 | Incident | a failing smoke check opens one `keel:incident` issue | a person triages it |
 | Memory | `memory.yml`: merged and rejected PRs are recorded on a `keel-memory` branch and recalled by later triage and analysis | |
+| Audit | each PR leaves one record per stage (analysis, Skeptic verdict, gate decision, human outcome) in `ledger.jsonl` on that branch, each carrying the hash of the one before | anyone can check it |
+
+Every action is also a graph you can walk. `python -m keel.ledger verify --file data/sample_ledger.jsonl` checks the hash
+chain, and `python -m keel.ledger explain --file data/sample_ledger.jsonl --pr 2` loads it into FalkorDB
+(`PullRequest -> AgentRun -> Verdict`, with `NEXT` edges for the chain) and lists every action behind that PR. The sample file
+comes from three PRs I simulated locally, not from GitHub. A hash chain shows that a record was edited or removed; it does not
+stop someone with write access from rewriting the whole chain, so the head hash is printed in the memory job's summary.
 
 ### The pull request stage in detail
 
@@ -59,7 +66,8 @@ Then three jobs run in order. The Skeptic reads the diff and the graph facts and
 could break, then a final `RISK: low`, `medium` or `high` line. The `risk-gate` job reads that verdict, ignores any comment
 that is not from `github-actions[bot]`, and fails only on `RISK: high` or on tests the PR broke. If there is no review it
 says so and asks for a human; it does not pass silently. The Reporter posts a status note that quotes both and lists what a
-person still has to decide. When the PR closes, `memory.yml` records whether it merged or was rejected in a JSONL file on a
+person still has to decide, including files that usually change together with the PR's files but were not touched (weakly connected
+components of strong co-change history). When the PR closes, `memory.yml` records whether it merged or was rejected in a JSONL file on a
 `keel-memory` branch, and the next analysis recalls it.
 
 After a human merges, `main.yml` builds the image, runs it, smoke tests it, and pushes it to the GitHub container registry.

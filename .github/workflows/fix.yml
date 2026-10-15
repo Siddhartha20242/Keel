@@ -37,6 +37,7 @@ jobs:
           if git ls-remote --exit-code --heads origin keel-memory >/dev/null 2>&1; then
             git fetch --depth=1 origin keel-memory
             git show FETCH_HEAD:memory.jsonl > .keel-memory/memory.jsonl || true
+            git show FETCH_HEAD:ledger.jsonl > .keel-memory/ledger.jsonl || true
           fi
       - name: try a fix
         env:
