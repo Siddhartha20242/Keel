@@ -1,24 +1,34 @@
 """Claude drives localize -> edit -> test; the merge gate is NOT in the model's hands (decide_and_act runs after `finish`)."""
 from __future__ import annotations
-import json
-from .specs import GRAPH_TOOLS, ACTION_TOOLS
+import json, time
+from .specs import GRAPH_TOOLS, ACTION_TOOLS, VALID
 from .pr import accepts
 from .tools import Toolbox
 
-SYSTEM = """You are Keel, an agent that turns a GitHub issue into a minimal, safe code change.
-Work from the code graph, not from guesses:
-1. localize the issue, then recall earlier attempts on the symbols you plan to touch.
-2. read_symbol the best candidate, make the smallest edit with edit_file.
-3. impacted_tests for the symbols you edited, run_tests on them; fix what you broke.
-4. finish with a short summary. Only name symbols/files that tools returned: any name not in the graph is rejected.
-Tools never accept names that are not in the graph. If a tool says not_in_graph, say so instead of inventing an answer."""
+SYSTEM = """You are Keel: turn a GitHub issue into a minimal safe code change using only the provided tools (exact names, no others).
+Order: localize -> recall -> read_symbol -> edit_file -> impacted_tests -> run_tests -> finish.
+Only name symbols/files that tools returned. If a tool says not_in_graph or unknown_symbol, say so; do not invent."""
 
 MAX_STEPS = 16
+RESULT_CHARS = 3000      # tool results are resent every turn; keep them small (small tiers cap tokens/minute)
+ISSUE_CHARS = 1200
+
+
+def _brief_localize(r: dict) -> dict:
+    if r.get("outcome") != "answered_with_path":
+        return r
+    return {"outcome": r["outcome"], "files": [{"file": f["file"], "score": f["score"],
+            "symbols": [{"symbol": s["symbol"], "via_tests": s.get("via_tests", [])[:1]} for s in f["symbols"][:3]]} for f in r["files"]]}
+
+
+def _compact(out: dict) -> str:
+    text = json.dumps(out, default=str, separators=(",", ":"))
+    return text if len(text) <= RESULT_CHARS else text[:RESULT_CHARS] + '..."truncated"'
 
 
 def _dispatch(tb: Toolbox, name: str, a: dict) -> dict:
     table = {
-        "localize": lambda: tb.localize(a.get("issue_text", ""), k=int(a.get("k", 5))),
+        "localize": lambda: _brief_localize(tb.localize(a.get("issue_text", ""), k=4)),
         "blast_radius": lambda: tb.blast_radius(a["symbol"], int(a.get("depth", 3))),
         "impacted_tests": lambda: tb.impacted_tests(a["symbols"], int(a.get("depth", 2)), limit=40),
         "path_between": lambda: tb.path_between(a["source"], a["target"]),
@@ -53,6 +63,9 @@ class _Anthropic:
         self.msgs.append({"role": "assistant", "content": r.content})
         return [{"id": b.id, "name": b.name, "input": b.input} for b in r.content if b.type == "tool_use"]
 
+    def nudge(self, text):
+        self.msgs.append({"role": "user", "content": text})
+
     def results(self, outs):
         self.msgs.append({"role": "user", "content": [{"type": "tool_result", "tool_use_id": i, "content": c} for i, c in outs]})
 
@@ -86,6 +99,9 @@ class _OpenAICompatible:
             out.append({"id": c.id, "name": c.function.name, "input": args})
         return out
 
+    def nudge(self, text):
+        self.msgs.append({"role": "user", "content": text})
+
     def results(self, outs):
         for i, c in outs:
             self.msgs.append({"role": "tool", "tool_call_id": i, "content": c})
@@ -102,10 +118,23 @@ def make_provider(provider: str | None, model: str | None, client=None):
 def run_agent(tb: Toolbox, case: dict, issue_text: str, model: str | None = None, client=None, provider: str | None = None) -> dict:
     from .agent import decide_and_act
     p = make_provider(provider, model, client)
-    p.start(f"Issue #{case['issue_number']}: {issue_text}")
-    summary = ""
-    for _ in range(MAX_STEPS):
-        uses = p.step()
+    p.start(f"Issue #{case['issue_number']}: {issue_text[:ISSUE_CHARS]}")
+    summary, nudges, waits = "", 0, 0
+    for _ in range(MAX_STEPS + 6):
+        try:
+            uses = p.step()
+        except Exception as e:                      # provider errors: recover where it makes sense, otherwise say why
+            msg = str(e)
+            code = getattr(e, "status_code", None)
+            if code == 400 and ("tool" in msg.lower()) and nudges < 3:
+                nudges += 1                         # the model called a tool that does not exist: tell it the real ones
+                p.nudge(f"That tool call was invalid. Use only these tools: {', '.join(VALID)}.")
+                continue
+            if code in (429, 503) and waits < 3:
+                waits += 1; time.sleep(8 * waits); continue
+            if code == 413:
+                raise RuntimeError("Request too large for this model/tier (tokens per minute). Use a model or plan with a larger limit.") from e
+            raise
         if not uses:
             break
         outs, done = [], False
@@ -114,7 +143,7 @@ def run_agent(tb: Toolbox, case: dict, issue_text: str, model: str | None = None
                 summary, done = u["input"].get("summary", ""), True
                 outs.append((u["id"], "ok"))
                 continue
-            outs.append((u["id"], json.dumps(_dispatch(tb, u["name"], u["input"]), default=str)[:12000]))
+            outs.append((u["id"], _compact(_dispatch(tb, u["name"], u["input"]))))
         p.results(outs)
         if done:
             break
