@@ -35,20 +35,24 @@ PROVEN means I ran it and saw the result below. WRITTEN means the code exists bu
 | Fixer on a real test failure (dry run) | broke `Store.shorten` on a throwaway git worktree, fed the real pytest log to `python -m keel.fix --kind ci --dry-run` | the agent located the symbol, reverted the inverted condition, the 5 graph-selected tests passed, lane auto_merge. No branch or PR was created |
 | Import graph | `extract_code` on `demo-app` | `__main__ -> server -> store -> codes`; changing `codes.py` reaches 3 source files |
 
+| **On GitHub:** `pr.yml` on three demo PRs ([#1 docs](https://github.com/Siddhartha20242/Keel/pull/1), [#2 breaking change](https://github.com/Siddhartha20242/Keel/pull/2), [#3 untested new file](https://github.com/Siddhartha20242/Keel/pull/3)) | opened them, watched the runs | tests, image + SBOM, CodeQL, gitleaks and `pip-audit` pass on all three. #2 fails `test`, `build` (the image's smoke test) and `risk-gate` ("blocked: tests the graph selected now fail", 3 new failures out of 5 selected). #1 and #3 pass the gate with "human approval required" because the Skeptic gave no verdict |
+| **On GitHub:** the bot's comments | read them on #1 and #2 | one Skeptic comment ("could not run: no model key configured", `RISK: unknown`) and one Reporter note with the evidence table, the blast-radius path, the files that change together and "what a human still has to decide" |
+| **On GitHub:** `fixer.yml` | PR #2 failed its `test` job | it triggered, found the failing job, pulled the log, passed its guards, then posted "no model key, so no fix was attempted" on the PR. Its first run crashed on a missing `python-dotenv`; fixed |
+| **On GitHub:** `issue.yml` | opened [demo issue #4](https://github.com/Siddhartha20242/Keel/issues/4) | triage comment "needs human: nothing in the code graph matches this report" and the label `keel:needs-human`. That is honest, but it is the same vocabulary gap seen locally: the report says "trailing slash", the code says `normalize_url` |
+| **On GitHub:** `memory.yml` and the ledger | closing PR #2 (I closed and reopened it to re-run checks) | it recorded PR #2 as `rejected` on the `keel-memory` branch (an accident of my close; the PR is open again). The ledger has 4 records and `python -m keel.ledger verify` says the chain is intact; `explain --pr 2` lists the four actions |
+| First real `pr.yml` run | #1 | `analyze` crashed on a variable used before it was set. My earlier local runs predated that edit. Fixed and re-run |
+
 ## WRITTEN (code exists, not run)
-- `fixer.yml` on GitHub: it runs on a failed `pr` workflow. The log format on a real runner, the `gh run view --log-failed`
-  output and the draft PR into the failing branch have not been seen. It checks out the PR's code and runs its tests, so it only
-  accepts same-repo PRs, and it skips branches starting with `keel/`.
-- `issue.yml`, `fix.yml` and the `incident` job on GitHub: they run on issue events and need real issues. Opening a draft PR
-  needs the repo setting "Allow GitHub Actions to create pull requests"; a PR opened with the default token does not start
-  `pr.yml` unless a `KEEL_PAT` secret is set (a human closing and reopening the draft also starts it). An incident issue
-  opened by the default token does not trigger `issue.yml` either.
-- `pr.yml` and `memory.yml` on GitHub: they only run on a real pull request, and none has been opened yet. Their steps are
-  proven only locally (above). Fork PRs are not supported (no secrets, read-only token): the agent jobs skip them.
-- The Skeptic and Reporter with a real model inside Actions. It needs an `OPENAI_API_KEY` repository secret.
-- That the gate actually blocks a merge: that needs branch protection requiring the `risk-gate` check, which is a repo
-  setting I have not changed.
-- CodeQL, gitleaks, the SBOM step and `pip-audit` inside `pr.yml`.
+- The Skeptic and Reporter with a real model **inside Actions**. No `OPENAI_API_KEY` repository secret is set, so on GitHub the
+  Skeptic said "could not run" and gave no verdict (the Skeptic did run with a real model locally; see PROVEN).
+- The Fixer producing an actual draft PR in Actions. On GitHub it ran, found the failing `test` job, and stopped at "no model
+  key". It needs the key, and the repo setting "Allow GitHub Actions to create pull requests" (currently off).
+- `fix.yml` (the human `keel:fix` label) and the `incident` job: no label was applied and no smoke check has failed. A PR opened
+  with the default token does not start `pr.yml` unless a `KEEL_PAT` secret is set. An incident issue opened by the default token
+  does not trigger `issue.yml` either.
+- That the gate actually blocks a merge: it needs branch protection requiring the `risk-gate` check, which I have not set
+  (the repo has none). On PR #2 the gate job failed, but nothing stops the merge button.
+- Fork PRs: the agent jobs skip them (no secrets, read-only token). Not tried.
 - The Anthropic provider path in `--mode llm`. Only the OpenAI-compatible path ran live; both are covered by a scripted
   fake-client test.
 - The MCP server (`python -m keel mcp`): imports cleanly, never connected to a client.

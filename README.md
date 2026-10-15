@@ -13,6 +13,11 @@ issue. Nothing in Keel merges, closes or assigns anything.
 
 Track: Agents That Act on Connected Data (secondary: Agent Memory).
 
+See it run on GitHub: [PR #1](https://github.com/Siddhartha20242/Keel/pull/1) (harmless docs change), [PR #2](https://github.com/Siddhartha20242/Keel/pull/2)
+(a "simplification" that breaks the dedupe: the gate blocks it), [PR #3](https://github.com/Siddhartha20242/Keel/pull/3) (new code with no tests)
+and [issue #4](https://github.com/Siddhartha20242/Keel/issues/4) (triage). The Skeptic and Reporter comments are on the PRs. With no model key
+set in this repo the Skeptic says it could not run; the graph-driven parts (tests, risk, gate, Reporter, ledger) all ran.
+
 Every step leaves something you can open: [out/4f7156f2.md](out/4f7156f2.md) is a replay that recalls an earlier attempt
 from memory, [out/9822a035.md](out/9822a035.md) is a live run where a real model wrote the patch, and the queries behind
 every number are in [queries/](queries/). STATUS.md separates what I ran from what is only written.
