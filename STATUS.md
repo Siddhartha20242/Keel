@@ -36,18 +36,17 @@ PROVEN means I ran it and saw the result below. WRITTEN means the code exists bu
 | Import graph | `extract_code` on `demo-app` | `__main__ -> server -> store -> codes`; changing `codes.py` reaches 3 source files |
 | **On GitHub:** `pr.yml` on three demo PRs ([#1 docs](https://github.com/Siddhartha20242/Keel/pull/1), [#2 breaking change](https://github.com/Siddhartha20242/Keel/pull/2), [#3 untested new file](https://github.com/Siddhartha20242/Keel/pull/3)) | opened them, watched the runs | tests, image + SBOM, CodeQL, gitleaks and `pip-audit` pass on all three. #2 fails `test`, `build` (the image's smoke test) and `risk-gate` ("blocked: tests the graph selected now fail", 3 new failures out of 5 selected). #1 and #3 pass the gate with "human approval required" because the Skeptic gave no verdict |
 | **On GitHub:** the bot's comments | read them on #1 and #2 | one Skeptic comment ("could not run: no model key configured", `RISK: unknown`) and one Reporter note with the evidence table, the blast-radius path, the files that change together and "what a human still has to decide" |
-| **On GitHub:** `fixer.yml` | PR #2 failed its `test` job | it triggered, found the failing job, pulled the log, passed its guards, then posted "no model key, so no fix was attempted" on the PR. Its first run crashed on a missing `python-dotenv`; fixed |
+| **On GitHub:** the Skeptic with a live model (Groq `gpt-oss-20b`, set through the `KEEL_MODEL` repo variable) | re-ran PR #1 and pushed a fresh commit to PR #2 | PR #1 (docstring): `RISK: low`, gate "one human approval (RISK: low, graph lane: canary)", Reporter added a model-written summary that passed the name check. PR #2 (broken dedupe): `RISK: high` with a correct finding about `Store.shorten` in `src/shortener/store.py` and a suggested test; gate blocked it. Earlier runs gave `RISK: unknown`: the model was cut off before its verdict line (fixed with a bigger token budget and a one-line retry) |
+| **On GitHub:** `fixer.yml`, end to end | PR #2 fails its `test` job | **First real attempt ([draft #5](https://github.com/Siddhartha20242/Keel/pull/5)) was wrong:** the agent edited an unrelated line in `server.py` and the Fixer still said "tests passed", because it only counted *new* failures on a branch that was already red. I closed #5 with a comment. Fixed: a CI fix must now make the tests that failed in CI pass. Two more log-reading bugs surfaced (the `FAILED` lines sit at the end of the log and were cut off; CI prefixes each line with a timestamp). **Second attempt ([draft #6](https://github.com/Siddhartha20242/Keel/pull/6)) is the correct fix**: it restores the inverted condition in `store.py`, and the PR body says "Verified: the 3 tests that failed in CI now pass". That is one issue, one model, one red build: it shows the path works, not how often it succeeds |
+| Re-running a workflow does not pick up new code | observed while debugging | `gh run rerun` reuses the original merge commit, so my fixes to `main` did not reach the run until I pushed a new commit to the PR branch (closing and reopening would also have written a bogus "rejected" memory record) |
 | **On GitHub:** `issue.yml` | opened [demo issue #4](https://github.com/Siddhartha20242/Keel/issues/4) | triage comment "needs human: nothing in the code graph matches this report" and the label `keel:needs-human`. That is honest, but it is the same vocabulary gap seen locally: the report says "trailing slash", the code says `normalize_url` |
 | **On GitHub:** `memory.yml` and the ledger | closing PR #2 (I closed and reopened it to re-run checks) | it recorded PR #2 as `rejected` on the `keel-memory` branch (an accident of my close; the PR is open again). The ledger has 4 records and `python -m keel.ledger verify` says the chain is intact; `explain --pr 2` lists the four actions |
 | First real `pr.yml` run | #1 | `analyze` crashed on a variable used before it was set. My earlier local runs predated that edit. Fixed and re-run |
 
 ## WRITTEN (code exists, not run)
-- The Skeptic and Reporter with a real model **inside Actions**. No `OPENAI_API_KEY` repository secret is set, so on GitHub the
-  Skeptic said "could not run" and gave no verdict (the Skeptic did run with a real model locally; see PROVEN).
-- The Fixer producing an actual draft PR in Actions. On GitHub it ran, found the failing `test` job, and stopped at "no model
-  key". It needs the key, and the repo setting "Allow GitHub Actions to create pull requests" (currently off).
-- `fix.yml` (the human `keel:fix` label) and the `incident` job: no label was applied and no smoke check has failed. A PR opened
-  with the default token does not start `pr.yml` unless a `KEEL_PAT` secret is set. An incident issue opened by the default token
+- Checks on the Fixer's own draft PR: a PR opened with the default token does not start `pr.yml` (PR #6 has no checks). A
+  `KEEL_PAT` secret would start them; I have not set one.
+- `fix.yml` (the human `keel:fix` label) and the `incident` job: no label was applied and no smoke check has failed. An incident issue opened by the default token
   does not trigger `issue.yml` either.
 - That the gate actually blocks a merge: it needs branch protection requiring the `risk-gate` check, which I have not set
   (the repo has none). On PR #2 the gate job failed, but nothing stops the merge button.
@@ -60,6 +59,8 @@ PROVEN means I ran it and saw the result below. WRITTEN means the code exists bu
 - Opening a real pull request from the replay tool: it writes a description to `out/` and stops.
 
 ## UNKNOWN
+- How often the Fixer picks the right place to edit: the first real attempt (#5) was wrong and the second (#6) was right. I have
+  two data points and one model.
 - How often the Skeptic's findings are right. It embellishes (see above), so the gate leans on the graph's numbers and a human
   reads the findings; I have no measurement of its precision.
 - Whether any of this holds on a repo that is not a small Python app or Flask.
