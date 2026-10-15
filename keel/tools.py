@@ -197,6 +197,12 @@ class Toolbox:
         rows = self._ro(self.g, "load_bearing", {"limit": max(1, min(int(limit), 20))}, ("symbol", "file", "score"))
         return {"outcome": "answered_with_path", "symbols": [{**r, "score": round(r["score"], 4)} for r in rows]}
 
+    def list_symbols(self, file: str = "", limit: int = 40) -> dict:
+        rows = self._ro(self.g, "list_symbols", {"file": file or "", "limit": max(1, min(int(limit), 80))}, ("symbol", "file"))
+        if not rows:
+            return {"outcome": "not_in_graph", "note": "No code symbols" + (f" in {file}" if file else "") + "."}
+        return {"outcome": "answered_with_path", "symbols": rows}
+
     def recall(self, symbols: list[str], limit: int = 5) -> dict:
         qn, err = self._symbols(symbols)
         if qn is None:
@@ -249,9 +255,17 @@ class Toolbox:
                 self.edited[path].append(q)
         return {"outcome": "answered_with_path", "edited_symbol": q, "file": path}
 
+    @staticmethod
+    def _test_id(t: str) -> str:
+        """Models mangle ids: accept tests.mod.test_x, tests/mod.py::test_x, tests/mod.test_x and Class variants."""
+        t = t.strip().replace("::", ".").replace("/", ".")
+        t = t.replace(".py.", ".")
+        return t[:-3] if t.endswith(".py") else t
+
     def run_tests(self, tests: list[str], timeout: int = 300, extra_files: list[str] | None = None) -> dict:
         ids = []
         for t in tests[:300]:
+            t = self._test_id(t)
             row = self.g.ro_query("MATCH (x:Test {id:$t}) RETURN x.path", {"t": t}).result_set
             if not row:
                 continue

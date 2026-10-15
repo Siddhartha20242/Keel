@@ -18,6 +18,8 @@ GRAPH_TOOLS = [
      "input_schema": _obj({"source": SYM, "target": SYM}, ["source", "target"])},
     {"name": "load_bearing", "description": "Most load-bearing symbols by PageRank.",
      "input_schema": _obj({"limit": INT}, [])},
+    {"name": "list_symbols", "description": "Browse code symbols by name, most load-bearing first. Use when localize finds nothing.",
+     "input_schema": _obj({"file": {"type": "string"}, "limit": INT}, [])},
     {"name": "recall", "description": "Earlier attempts and outcomes on these symbols. Check before editing.",
      "input_schema": _obj({"symbols": SYMS}, ["symbols"])},
 ]

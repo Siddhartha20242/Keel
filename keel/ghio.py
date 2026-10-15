@@ -3,7 +3,7 @@ pipeline's own bot from speaking as the Skeptic: the gate ignores every other co
 from __future__ import annotations
 import json, subprocess
 
-MARK = {"skeptic": "<!-- keel:skeptic -->", "report": "<!-- keel:report -->"}
+MARK = {"skeptic": "<!-- keel:skeptic -->", "report": "<!-- keel:report -->", "triage": "<!-- keel:triage -->"}
 TRUSTED_AUTHOR = "github-actions[bot]"
 
 
@@ -35,3 +35,18 @@ def upsert_comment(repo: str, pr: int | str, kind: str, body: str) -> str:
         return "updated"
     _gh("api", f"repos/{repo}/issues/{pr}/comments", "-F", "body=@-", stdin=body)
     return "created"
+
+
+LABEL_COLORS = {"keel:agent-can-try": "0e8a16", "keel:needs-human": "d93f0b", "keel:fix": "5319e7", "keel:incident": "b60205"}
+
+
+def ensure_label(repo: str, name: str) -> None:
+    color = LABEL_COLORS.get(name, "fbca04" if name.startswith("keel:risk-") else "ededed")
+    _gh("label", "create", name, "--repo", repo, "--force", "--color", color)
+
+
+def apply_labels(repo: str, issue: int | str, labels: list[str]) -> None:
+    """Create (if missing) and add labels. The names come from the pipeline's own fixed set, never from issue text."""
+    for name in labels:
+        ensure_label(repo, name)
+    _gh("issue", "edit", str(issue), "--repo", repo, "--add-label", ",".join(labels))

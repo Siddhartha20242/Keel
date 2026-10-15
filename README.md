@@ -1,9 +1,14 @@
 # Keel
 
-Keel puts a code graph behind a coding agent, so something other than the model decides how far its change is trusted.
-Given a GitHub issue, the agent finds where to edit, makes the change and runs tests. Then queries on a FalkorDB graph
-decide whether the change can merge automatically, needs a canary, or needs a human, and who that human should be.
-Keel writes a PR description but never pushes, opens or merges anything, so a person still decides what ships.
+Keel takes work from a GitHub issue to production and keeps a human in charge at every gate. A code graph in FalkorDB sits
+behind each decision, so what the agents say is checked against how the code is actually connected, tested and owned.
+It is for DevOps teams who want agents in the pipeline without giving them the merge button.
+
+An issue is triaged against the graph. A person decides whether an agent should try it. The agent drafts a fix and opens a
+draft pull request only if the tests the graph selects pass. The pull request goes through CI, a Skeptic agent that tries
+to break it, a gate that decides how much human approval it needs, and a Reporter that lists what a person still has to
+decide. A human merges. Then the image is built, run, smoke tested and published, and checked again every hour. A failing
+check opens an incident issue, which starts the loop again. Nothing in Keel merges, closes or assigns anything.
 
 Track: Agents That Act on Connected Data (secondary: Agent Memory).
 
@@ -28,7 +33,19 @@ test, an untested change or a failed earlier attempt can only move the PR toward
 Three modes of the replay tool: `oracle` applies the real upstream fix as the patch, `mutant` applies it and then breaks it on purpose, and
 `llm` lets a model do the localizing, editing and testing. The tools are also exposed over MCP.
 
-## The pull request pipeline
+## Issue to production, stage by stage
+
+| stage | what runs | who decides |
+|---|---|---|
+| Issue | `issue.yml`: triage comment with where the graph points, who has changed it, which tests cover it, what depends on it, and whether an agent could try | a person reads it |
+| Implement | `fix.yml`: after a person adds the `keel:fix` label, the agent tries a fix and opens a draft PR only if the graph-selected tests pass | a person applied the label |
+| Pull request | `pr.yml`: tests, image and SBOM, CodeQL, gitleaks, `pip-audit`, graph analysis, Skeptic, risk gate, Reporter | a person reviews and merges |
+| Release and deploy | `main.yml`: build, run, smoke test, push the image to the container registry | runs after the human merge |
+| Monitor | `main.yml` every hour: build from main and smoke test again | |
+| Incident | a failing smoke check opens one `keel:incident` issue | a person triages it |
+| Memory | `memory.yml`: merged and rejected PRs are recorded on a `keel-memory` branch and recalled by later triage and analysis | |
+
+### The pull request stage in detail
 
 Keel also runs as a GitHub Actions pipeline around a small app, a URL shortener in `demo-app/` (standard library only, in
 memory, so a restart wipes it). The agents can comment but cannot approve, merge or edit, so a human keeps the final say.

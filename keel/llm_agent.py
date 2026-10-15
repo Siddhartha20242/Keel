@@ -1,12 +1,13 @@
 """Claude drives localize -> edit -> test; the merge gate is NOT in the model's hands (decide_and_act runs after `finish`)."""
 from __future__ import annotations
-import json, subprocess, time
+import json, os, subprocess, time
 from .specs import GRAPH_TOOLS, ACTION_TOOLS, VALID
 from .pr import accepts
 from .tools import Toolbox
 
 SYSTEM = """You are Keel: turn a GitHub issue into a minimal safe code change using only the provided tools (exact names, no others).
-Order: localize -> recall -> read_symbol -> edit_file -> impacted_tests -> run_tests -> finish.
+Order: localize (or list_symbols if it finds nothing) -> recall -> read_symbol -> edit_file -> impacted_tests -> run_tests -> finish.
+Never stop without calling finish. If no change is warranted, call finish and say why.
 Only name symbols/files that tools returned. If a tool says not_in_graph or unknown_symbol, say so; do not invent."""
 
 MAX_STEPS = 16
@@ -34,6 +35,7 @@ def _dispatch(tb: Toolbox, name: str, a: dict) -> dict:
         "path_between": lambda: tb.path_between(a["source"], a["target"]),
         "load_bearing": lambda: tb.load_bearing(int(a.get("limit", 10))),
         "recall": lambda: tb.recall(a["symbols"]),
+        "list_symbols": lambda: tb.list_symbols(a.get("file", ""), int(a.get("limit", 40))),
         "read_symbol": lambda: tb.read_symbol(a["symbol"]),
         "edit_file": lambda: tb.edit_file(a["path"], a["old"], a["new"]),
         "run_tests": lambda: tb.run_tests(a["tests"]),
@@ -120,7 +122,7 @@ def run_agent(tb: Toolbox, case: dict, issue_text: str, model: str | None = None
     from .agent import decide_and_act
     p = make_provider(provider, model, client)
     p.start(f"Issue #{case['issue_number']}: {issue_text[:ISSUE_CHARS]}")
-    summary, nudges, waits = "", 0, 0
+    summary, nudges, waits, finish_nudged = "", 0, 0, False
     for _ in range(MAX_STEPS + 6):
         try:
             uses = p.step()
@@ -137,6 +139,12 @@ def run_agent(tb: Toolbox, case: dict, issue_text: str, model: str | None = None
                 raise RuntimeError("Request too large for this model/tier (tokens per minute). Use a model or plan with a larger limit.") from e
             raise
         if not uses:
+            if not summary and not finish_nudged:      # it forgot to call finish: ask once
+                finish_nudged = True
+                p.nudge("Call the finish tool now with a one-paragraph summary of what you changed and why (or why you changed nothing).")
+                continue
+            if os.environ.get("KEEL_DEBUG"):
+                print("[step] model replied without a tool call; stopping")
             break
         outs, done = [], False
         for u in uses:
@@ -144,7 +152,10 @@ def run_agent(tb: Toolbox, case: dict, issue_text: str, model: str | None = None
                 summary, done = u["input"].get("summary", ""), True
                 outs.append((u["id"], "ok"))
                 continue
-            outs.append((u["id"], _compact(_dispatch(tb, u["name"], u["input"]))))
+            res_text = _compact(_dispatch(tb, u["name"], u["input"]))
+            if os.environ.get("KEEL_DEBUG"):
+                print(f"[step] {u['name']}({json.dumps(u['input'])[:160]}) -> {res_text[:200]}")
+            outs.append((u["id"], res_text))
         p.results(outs)
         if done:
             break
@@ -168,5 +179,11 @@ def run_agent(tb: Toolbox, case: dict, issue_text: str, model: str | None = None
     res = decide_and_act(tb, case, edited, summary, baseline_failures=baseline)
     if diff:
         res["diff"] = diff
-        res["pr_body"] = res["pr_body"].replace("\n## Why here (localization)", "\n## Diff written by the model\n```diff\n" + diff[:3500] + "\n```\n\n## Why here (localization)", 1)
+        section = "\n## Diff written by the model\n```diff\n" + diff[:3500] + "\n```\n"
+        for marker in ("\n## Why here (localization)", "\n## Blast radius", "\n## Tests:", "\n## Suggested reviewers", "\n_Opened by Keel"):
+            if marker in res["pr_body"]:
+                res["pr_body"] = res["pr_body"].replace(marker, section + marker, 1)
+                break
+        else:
+            res["pr_body"] += section
     return res

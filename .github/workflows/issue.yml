@@ -1,0 +1,47 @@
+name: issue
+
+# Issue stage: when an issue is opened, the code graph says where it points, who has changed that code, which tests cover it
+# and whether an agent could plausibly fix it. Posts one comment and suggests labels; assigns and closes nothing.
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  OPENAI_BASE_URL: ${{ vars.OPENAI_BASE_URL || 'https://api.groq.com/openai/v1' }}
+  KEEL_MODEL: ${{ vars.KEEL_MODEL || 'openai/gpt-oss-120b' }}
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    services:
+      falkordb:
+        image: falkordb/falkordb:latest
+        ports: ["6379:6379"]
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -r requirements-ci.txt
+      - name: load agent memory
+        run: |
+          mkdir -p .keel-memory
+          if git ls-remote --exit-code --heads origin keel-memory >/dev/null 2>&1; then
+            git fetch --depth=1 origin keel-memory
+            git show FETCH_HEAD:memory.jsonl > .keel-memory/memory.jsonl || true
+          fi
+      - name: triage
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: |
+          printf '%s' "$ISSUE_BODY" > issue-body.txt
+          python -m keel.triage --repo-dir . --sha "$(git rev-parse HEAD)" --issue "${{ github.event.issue.number }}" \
+            --title "$ISSUE_TITLE" --body-file issue-body.txt --memory .keel-memory/memory.jsonl \
+            --repo "${{ github.repository }}" --out ci-out

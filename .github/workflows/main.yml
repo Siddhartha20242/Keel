@@ -24,6 +24,25 @@ jobs:
           for i in $(seq 1 20); do curl -fsS localhost:8080/health >/dev/null && break || sleep 1; done
           ./scripts/smoke.sh http://localhost:8080
 
+  # Monitor -> issue: a failing smoke check opens one incident issue (and does not repeat it while one is open).
+  incident:
+    needs: smoke
+    if: ${{ always() && needs.smoke.result == 'failure' }}
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: open an incident issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label create keel:incident --repo "${{ github.repository }}" --force --color b60205
+          if [ -z "$(gh issue list --repo "${{ github.repository }}" --label keel:incident --state open --json number --jq '.[0].number')" ]; then
+            gh issue create --repo "${{ github.repository }}" --label keel:incident \
+              --title "Smoke check failing on main" \
+              --body "The post-merge or hourly smoke test failed: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          fi
+
   # Not on the hourly schedule: that run is the smoke job only.
   release:
     needs: smoke

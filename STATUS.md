@@ -22,7 +22,14 @@
 | Skeptic and Reporter with no key | `--dry-run` | Skeptic says it could not run and gives `RISK: unknown`; Reporter lists what a human must decide |
 | 22 unit tests for the pipeline logic | `python -m pytest tests/test_unit.py tests/test_pipeline_units.py` | pass, no database needed |
 
+| Triage on a realistic issue | `python -m keel.triage --dry-run` locally | recommends "agent can try", points at `store.py`/`codes.py`, 10 of 12 tests, risk 0.277 |
+| Fix agent on a realistic issue (dry run, Groq `gpt-oss-120b`) | `python -m keel.fix --dry-run` locally | `localize` found nothing, the agent browsed with `list_symbols`, edited `normalize_url`, 7 selected tests passed, lane auto_merge. The diff is a correct minimal fix. No branch or PR was created |
+
 ## Written, but not run
+- `issue.yml`, `fix.yml` and the `incident` job on GitHub: they run on issue events and need real issues. Opening a draft PR
+  needs the repo setting "Allow GitHub Actions to create pull requests"; a PR opened with the default token does not start
+  `pr.yml` unless a `KEEL_PAT` secret is set (a human closing and reopening the draft also starts it). An incident issue
+  opened by the default token does not trigger `issue.yml` either.
 - `pr.yml` and `memory.yml` on GitHub: they only run on a real pull request, and none has been opened yet. Their steps are
   proven only locally (above). Fork PRs are not supported (no secrets, read-only token): the agent jobs skip them.
 - The Skeptic and Reporter with a real model inside Actions. It needs an `OPENAI_API_KEY` repository secret.

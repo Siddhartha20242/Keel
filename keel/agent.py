@@ -67,6 +67,8 @@ def decide_and_act(tb: Toolbox, case: dict, edited_syms: list[str], summary: str
     if run:
         ids = [t["test"] for t in tests.get("tests", [])]
         result = tb.run_tests(ids, extra_files=list(extra_test_files))
+        if "failed" not in result:      # nothing runnable was selected (e.g. no test executes the edit): record that, do not crash
+            result = {"ran": 0, "passed": True, "failed": [], "returncode": 0, "missing": [], "tail": result.get("note", "")}
         # only failures the patch introduced gate the PR: tests already failing before the patch are environment noise
         new = sorted(set(result["failed"]) - (baseline_failures or set()))
         result["new_failures"] = new

@@ -115,3 +115,24 @@ def test_memory_cli_records_the_reporters_data_only(tmp_path):
     memory_cli.main(["record", "--repo", "o/r", "--pr", "7", "--outcome", "rejected", "--file", str(out), "--comments-file", str(cf)])
     recs = memory_io.read_records(out)
     assert len(recs) == 1 and recs[0]["id"] == "pr7" and recs[0]["outcome"] == "rejected"
+
+
+def test_triage_summary_is_stripped_of_links_and_mentions():
+    from keel.triage import sanitize
+    out = sanitize("See https://evil.example/x and ping @maintainer please")
+    assert "evil.example" not in out and "[link removed]" in out and "@maintainer" not in out
+
+
+def test_run_tests_accepts_mangled_test_ids():
+    from keel.tools import Toolbox
+    f = Toolbox._test_id
+    assert f("tests/test_codes.py::test_x") == f("tests/test_codes.test_x") == f("tests.test_codes.test_x") == "tests.test_codes.test_x"
+    assert f("tests/test_basic.py::TestA::test_y") == "tests.test_basic.TestA.test_y"
+
+
+def test_triage_render_recommends_a_human_when_nothing_matches():
+    from keel.triage import render
+    ctx = {"issue": 1, "title": "t", "outcome": "not_in_graph", "suspects": [], "labels": ["keel:needs-human"], "recommendation": "needs-human",
+           "why": "Nothing in the code graph matches this report.", "tests": {}, "owners": [], "blast": {}, "memory": [], "risk": None}
+    text = render(ctx)
+    assert "needs human" in text and "keel:fix" in text and "Nothing in the code graph" in text

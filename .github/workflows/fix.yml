@@ -1,0 +1,50 @@
+name: fix
+
+# Implementation stage. A HUMAN adds the `keel:fix` label to an issue. The agent then tries a fix with the graph tools, runs the
+# tests the graph selects and, only if they pass, opens a DRAFT pull request. It never merges. Needs the repo setting
+# "Allow GitHub Actions to create pull requests". A PR opened with the default token does not start the PR pipeline; set a
+# KEEL_PAT secret (a token that can open PRs) and it will, otherwise a human closing and reopening the draft starts it.
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+env:
+  OPENAI_BASE_URL: ${{ vars.OPENAI_BASE_URL || 'https://api.groq.com/openai/v1' }}
+  KEEL_MODEL: ${{ vars.KEEL_MODEL || 'openai/gpt-oss-120b' }}
+
+jobs:
+  fix:
+    if: github.event.label.name == 'keel:fix'
+    runs-on: ubuntu-latest
+    services:
+      falkordb:
+        image: falkordb/falkordb:latest
+        ports: ["6379:6379"]
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install -r requirements-ci.txt
+      - name: load agent memory
+        run: |
+          mkdir -p .keel-memory
+          if git ls-remote --exit-code --heads origin keel-memory >/dev/null 2>&1; then
+            git fetch --depth=1 origin keel-memory
+            git show FETCH_HEAD:memory.jsonl > .keel-memory/memory.jsonl || true
+          fi
+      - name: try a fix
+        env:
+          GH_TOKEN: ${{ secrets.KEEL_PAT || github.token }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: |
+          printf '%s' "$ISSUE_BODY" > issue-body.txt
+          python -m keel.fix --repo-dir . --sha "$(git rev-parse HEAD)" --issue "${{ github.event.issue.number }}" \
+            --title "$ISSUE_TITLE" --body-file issue-body.txt --memory .keel-memory/memory.jsonl --repo "${{ github.repository }}"
