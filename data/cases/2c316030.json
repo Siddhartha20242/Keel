@@ -1,0 +1,15 @@
+{
+  "id": "2c316030",
+  "split": "heldout",
+  "fix_commit": "2c3160304278d323da8485057770926d1b582579",
+  "parent": "ce08bc704e24c01582052f5c544fae181d08386f",
+  "issue_number": 5628,
+  "title": "dotenv file arg should take precedence over default dotenv files",
+  "body": "As pointed out in #5532, `-e file` is loaded after the default `.env` and `.flaskenv` files, which means it won't override env vars that are set by the defaults. It will be a little tricky to track during CLI startup, but I think it should be possible to fix this so that precedence is: `os.environ` > `-e path` > `.env` > `.flaskenv`.",
+  "truth_src": [
+    "src/flask/cli.py"
+  ],
+  "truth_tests": [
+    "tests/test_cli.py"
+  ]
+}

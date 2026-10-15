@@ -1,0 +1,15 @@
+{
+  "id": "53b8f082",
+  "split": "dev",
+  "fix_commit": "53b8f08218796d95764c5252bccd8a50a173a6fb",
+  "parent": "5addaf833b2e8c7a616f89dd8ad5a44b07d7c000",
+  "issue_number": 5786,
+  "title": "Session is not updated on redirect target endpoint in tests",
+  "body": "Hello team.\nDuring writing tests, I noticed a strange session behavior.\n\nI want to verify that after a redirect, the target location sets valid session properties, and it seems like in tests, the session properties when following redirects are not saved/exposed to the test environment.\n\nHere's an example:\n```python\nimport pytest\nfrom flask import Flask, redirect, session\n\n@pytest.fixture\ndef app():\n    app = Flask(__name__)\n    app.debug = True\n    app.secret_key = 'test_secret'  # noqa: S105 \u2013 fake secret key for testing purposes\n\n    @app.get('/redirect')\n    def do_redirect():\n        print(\"Redirecting to target endpoint\", flush=True)\n        session[\"redirected\"] = \"true\"\n        return redirect('/target', 302)\n\n    @app.get('/target')\n    def target():\n        print(\"Target endpoint reached\", flush=True)\n        session['foo'] = 'bar'\n        return 'Target', 200\n\n    return app\n\n@pytest.fixture()\ndef client(app):\n    return app.test_client()\n\ndef test_session(client):\n    with client:\n        response = client.get(\"/redirect\", follow_redirects=True)\n\n        print(f\"Session after a redirect: {session.items()}\", flush=True)\n        assert response.status_code == 200\n        assert response.data == b\"Target\"\n\n        assert session.get(\"redirected\") == \"true\"\n        assert session.get('foo') == 'bar'\n\n        client.get(\"/target\", follow_redirects=True)\n        assert session.get('foo') == 'bar'\n        assert response.data == b\"Target\"\n        print(f\"Session after a direct request: {session.items()}\", flush=True)\n```\n\nThe test fails on the first assertion `assert session.get('foo') == 'bar'`. \nIf I comment it out, the test output is the following:\n\n```\nRedirecting to the target endpoint\nTarget endpoint reached\nSession after a redirect: dict_items([('redirected', 'true')])\nTarget endpoint reached\nSession after a direct request: dict_items([('foo', 'bar'), ('redirected', 'true')])\n```\n\n**IMPORTANT**: The described behavior is not reproduced when running the application with the real HTTP requests.\n\nEnvironment:\n\n- Python version: 3.13\n- Flask version: 3.10\n",
+  "truth_src": [
+    "src/flask/testing.py"
+  ],
+  "truth_tests": [
+    "tests/test_testing.py"
+  ]
+}

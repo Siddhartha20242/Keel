@@ -1,0 +1,15 @@
+{
+  "id": "4f7156f2",
+  "split": "heldout",
+  "fix_commit": "4f7156f2c3271613b34d04040b502b9d7ae35eb9",
+  "parent": "10bdf61a0f751f3cb000f8f8ac5ac5b4bb535677",
+  "issue_number": 5636,
+  "title": "configure and check `request.trusted_hosts`",
+  "body": "If `request.trusted_hosts` is set, it will be checked when accessing `request.host`/`url`/etc. Add `TRUSTED_HOSTS` config, and check it during routing.",
+  "truth_src": [
+    "src/flask/app.py"
+  ],
+  "truth_tests": [
+    "tests/test_request.py"
+  ]
+}

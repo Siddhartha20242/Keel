@@ -1,0 +1,18 @@
+{
+  "id": "6a649690",
+  "split": "heldout",
+  "fix_commit": "6a64969009bf1898bd302e6a9633f71942523f7f",
+  "parent": "adf363679da2d9a5ddc564bb2da563c7ca083916",
+  "issue_number": 5815,
+  "title": "pass context internally instead of using contextvars",
+  "body": "Currently, there are a bunch of different methods on the `Flask` class that run to dispatch each request. Many of these access `request` and other context proxies. We should update them to pass the `AppContext` everywhere instead. This is more convenient after #5812 with only one context object instead of two. As @pgjones pointed out in #5229, not having to access the contextvar is a significant speedup to ASGI Quart, although it doesn't appear to affect WSGI Flask as much. Perhaps if we were serving with greenlets and so contexts were switching more, it would be more noticeable in Flask too.\n\nThe obvious problem is that it is a breaking change to the signatures of all these methods. I'm unsure how many methods are affected, but I'm also unsure how many projects are even subclassing `Flask` to override any of the methods. The fact that the methods are public seems unintentional, compared to the much more common ways of configuring and customizing an app.\n\nWe could continue to support both signatures, showing a deprecation warning for the old one, by adding some detection to `Flask.__init__`. This would add some amount of time during app setup, but wouldn't affect runtime performance of the app.\n\n---\n\nAnother idea I had for the future was to have `@route` and other decorators inspect the signature of the decorated function, to allow injecting `request`, `app`, etc. if users would rather use that pattern than import the proxies. Having the request object directly available in all the dispatch methods would make this more straightforward. User code would be able to choose what pattern they want, the current proxy pattern would never be deprecated for user code.\n",
+  "truth_src": [
+    "src/flask/app.py",
+    "src/flask/ctx.py",
+    "src/flask/templating.py"
+  ],
+  "truth_tests": [
+    "tests/test_reqctx.py",
+    "tests/test_subclassing.py"
+  ]
+}

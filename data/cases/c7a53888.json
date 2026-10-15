@@ -1,0 +1,17 @@
+{
+  "id": "c7a53888",
+  "split": "heldout",
+  "fix_commit": "c7a53888a1a514619b0611fd8b7928592f4ed612",
+  "parent": "62c56e08c43f5eb174d15dd050591cfba9aed548",
+  "issue_number": 5625,
+  "title": "extend config for Request form memory settings",
+  "body": "Werkzeug provides three settings on `Request` to control form parsing: `max_content_length`, `max_form_memory_size`, and `max_form_parts`. Only `max_content_length` is exposed as a Flask config right now, and the way it's implemented means it can only be set for the whole application, not per-request. Fix all that. Document these in the security page as well as the config page.",
+  "truth_src": [
+    "src/flask/app.py",
+    "src/flask/wrappers.py"
+  ],
+  "truth_tests": [
+    "tests/test_basic.py",
+    "tests/test_request.py"
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "id": "4995a775",
+  "split": "dev",
+  "fix_commit": "4995a775df21a206b529403bc30d71795a994fd4",
+  "parent": "07c7d5730a2685ef2281cc635e289685e5c3d478",
+  "issue_number": 5553,
+  "title": "Revisit SERVER_NAME's impact on routing and external URL generation",
+  "body": "#998 was a discussion regarding the impact the `SERVER_NAME` setting has on an application.  IMO, there was consensus in that issue, including by @mitsuhiko, that `SERVER_NAME` being used both in routing and in URL generation was problematic.  \r\n\r\nThat issue was closed by https://github.com/pallets/flask/pull/2635, which made a change regarding subdomain matching.  However, IMO, it did not address the fundamental problem of `SERVER_NAME` impacting two disparate mechanisms in Flask.\r\n\r\nI found two additional issues since #998 that have attempted to point out the problem with `SERVER_NAME`: #2813, #3465\r\n\r\nIn #2813, a minimal, complete, and verifiable example was requested and I have therefore prepared an [example gist that demonstrates the problem](https://gist.github.com/rsyring/c50a500a5d35787ef45c1ff1e78d8898).\r\n\r\nThe gist's third \"currently impossible\" test demonstrates that it's currently impossible to:\r\n\r\n* Set `SERVER_NAME` so external URL generation works outside a request context with only an app context; and\r\n* Have the app respond properly to multiple host names. \r\n\r\nMy particular use case currently is that I need `SERVER_NAME` set so external URLs will be created accurately in distributed tasks where no web request is present.  Additionally, I need the app to respond to multiple host names 1) the canonical URL the public uses; and 2) the IP address based URL our load balancer uses for health checks.\r\n\r\nIMO, `SERVER_NAME` should be deprecated and two new settings should be created.  One which affects external URL generation and a second that affects routing resolution.\r\n\r\nThe setting for the URL generation could be `CANONICAL_URL` and, because its a URL, it could eliminate the need for `url_for()`'s `_scheme` arg.\r\n\r\nThanks for your consideration.\r\n\r\n- Python version: 3.12\r\n- Flask version: 3.0.3\r\n",
+  "truth_src": [
+    "src/flask/app.py"
+  ],
+  "truth_tests": [
+    "tests/test_basic.py",
+    "tests/test_blueprints.py"
+  ]
+}

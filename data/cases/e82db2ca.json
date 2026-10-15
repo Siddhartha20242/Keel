@@ -1,0 +1,18 @@
+{
+  "id": "e82db2ca",
+  "split": "dev",
+  "fix_commit": "e82db2ca3a22c9614c1987392c9cfaa8c6ce99ad",
+  "parent": "d3b78fd18a8d9e224cb9ef58a23cec9b1ffc9ce9",
+  "issue_number": 5916,
+  "title": "`provide_automatic_options` is weird",
+  "body": "While dealing with trying to detect duplicate routes in https://github.com/pallets/werkzeug/issues/3105, I ran into an issue with Flask, which adds `OPTIONS` to every single rule by default.\n\nI started looking into Flask's `provide_automatic_options` feature, and it's just weird.\n\n- Why is there a `PROVIDE_AUTOMATIC_OPTIONS` config? What benefit is there to turning `OPTIONS` off at all, let alone configuring it for a given deployment.\n- Flask adds `OPTIONS` to every route, then has a check that runs on dispatching _every_ request to see if the method was `OPTIONS` and `provide_automatic_options` was enabled for the rule. Performing this check for every request seems wasteful, as opposed to adding an actual rule and endpoint so that the routing that's already happening handles it.\n    - But adding a rule is also sort of bad, as it results in a bunch of duplicate rules since Flask has no way to know what other rules have already been added. This can be caught with Werkzeug 3.2, and doesn't cause problems in earlier versions, but it's still annoying.\n- `provide_automatic_options` can be set as an attribute on the view function. There are some other attributes that are barely documented as well, such as `required_methods`. This is presumably mostly for `View` classes, but works on functions too, making type annotations unhelpful.\n- If `PROVIDE_AUTOMATIC_OPTIONS` is disabled (not the default), the logic for the `provide_automatic_options` argument and attribute doesn't work correctly to _enable_ it, it only works for _disabling_.\n- The tests for this were incomplete and had some issues. Some other tests were revealed to be adding duplicate rules as well. \n\nAt a minimum I've fixed the enabling issue. I've also got a change that registers a route and view for options instead of using special dispatch logic. We should also consider deprecating the config.",
+  "truth_src": [
+    "src/flask/sansio/app.py"
+  ],
+  "truth_tests": [
+    "tests/test_basic.py",
+    "tests/test_blueprints.py",
+    "tests/test_cli.py",
+    "tests/test_views.py"
+  ]
+}

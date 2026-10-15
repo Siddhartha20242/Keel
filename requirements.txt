@@ -1,0 +1,14 @@
+falkordb>=1.0
+anthropic>=0.40
+mcp[cli]>=1.2,<2
+coverage>=7
+pytest==8.3.5
+# dependencies of the target repo (pallets/flask) so its own test-suite runs for per-test coverage
+werkzeug
+jinja2
+itsdangerous
+click
+blinker
+markupsafe
+asgiref
+python-dotenv

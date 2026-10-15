@@ -1,0 +1,16 @@
+{
+  "id": "28d5a4d7",
+  "split": "heldout",
+  "fix_commit": "28d5a4d71824ff5823ae310e3fd014b48b33d583",
+  "parent": "66af0e55ef6631d05c691707da19d0f1c46921ea",
+  "issue_number": 5504,
+  "title": "allow setting encoding in open_resource()",
+  "body": "This is a duplicate of #1740 &mdash; that may have been closed for lack of a clear rationale, however, and I'd like to suggest it again with the following reasoning.\r\n\r\nThe documentation currently gives this example for using `open_resource()`:\r\n\r\n```python\r\nwith app.open_resource(\"schema.sql\") as f:\r\n    conn.executescript(f.read())\r\n```\r\n\r\nOn Windows, however, this can fail to open a file encoded in UTF-8, which most are these days, and safer code looks like this:\r\n\r\n```python\r\nwith app.open_resource(\"schema.sql\", mode=\"rb\") as f:\r\n   conn.executescript(f.read().decode(\"utf-8\"))  # type: ignore [attr-defined]\r\n```\r\n\r\n(The type comment is needed to prevent mypy from complaining about `f.read()` possibly being a string with no `.decode()` method, as it can't tell that the file was opened in 'rb' mode.)\r\n\r\nIt would be cleaner and more flexible to be able to write:\r\n\r\n```python\r\nwith app.open_resource(\"schema.sql\", encoding=\"utf-8\") as f:\r\n   conn.executescript(f.read())\r\n```\r\n",
+  "truth_src": [
+    "src/flask/app.py",
+    "src/flask/blueprints.py"
+  ],
+  "truth_tests": [
+    "tests/test_helpers.py"
+  ]
+}

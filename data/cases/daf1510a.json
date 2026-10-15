@@ -1,0 +1,17 @@
+{
+  "id": "daf1510a",
+  "split": "heldout",
+  "fix_commit": "daf1510a4bda652ac2cfca03ec5567b03ddf8bf1",
+  "parent": "85c5d93cbd049c4bd0679c36fd1ddcae8c37b642",
+  "issue_number": 5729,
+  "title": "The `template_filter` decorator doesn't work if you don't pass an argument",
+  "body": "## What's the issue?\n\nYou can use `template_filter` as a decorator, but it only registers the filter if you write an explicit name or an empty set of parentheses. If you call it without parens, the filter doesn't get registered.\n\nIt's a small difference and can be confusing.\n\n## Minimal example\n\nConsider the following program:\n\n```python\nfrom flask import Flask, render_template_string\n\n\napp = Flask(__name__)\n\n\n@app.template_filter\ndef double(x):\n    return x * 2\n\n\n@app.route(\"/\")\ndef index():\n    return render_template_string(\"2 times 2 is {{ 2 | double }}\")\n```\n\nIf you run this app (`flask run --port 8008 --debug`) and then open it in your browser (`http://localhost:8008`) you'll get an error:\n\n```\njinja2.exceptions.TemplateAssertionError: No filter named 'double'.\n```\n\nThis is confusing, and it took me a while to realise the missing parentheses in `app.template_filter` were at fault.\n\n## Suggested fix\n\nI think it would be helpful if the decorator either:\n\n* Supported being called without parentheses, or\n* Printed an explicit warning if called this way, e.g. `Did you use 'template_filter' as a decorator without parentheses? You need to call it with 'template_filter()'`\n\nThis is caught by type checkers, but not everybody type checks their Python and the error message is less obvious:\n\n```\nArgument 1 to \"template_filter\" of \"App\" has incompatible type \"Callable[[Any], Any]\"; expected \"str | None\"\n```\n\nI've had a look at the relevant code, and I'd be happy to provide a patch if you think this is a useful change.\n\n## Environment\n\n- Python version: Python 3.11.11\n- Flask version: Flask 3.1.0\n",
+  "truth_src": [
+    "src/flask/sansio/app.py",
+    "src/flask/sansio/blueprints.py"
+  ],
+  "truth_tests": [
+    "tests/test_blueprints.py",
+    "tests/test_templating.py"
+  ]
+}

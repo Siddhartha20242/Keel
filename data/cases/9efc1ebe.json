@@ -1,0 +1,16 @@
+{
+  "id": "9efc1ebe",
+  "split": "heldout",
+  "fix_commit": "9efc1ebeeb431769897798cdf8de2c67dcbbc9c0",
+  "parent": "6f2014d353d514e404c1f40e8f0a24e2bf62b941",
+  "issue_number": 5472,
+  "title": "Add support for partitioned session cookies",
+  "body": "Related issue with historical context: https://github.com/pallets/werkzeug/issues/2797\r\n\r\nPartitioned cookies are now supported in Werkzeug: https://github.com/pallets/werkzeug/pull/2855\r\n\r\nIt would be nice to have first-class support for the flask session cookie using the `Partitioned` flag to provide support for Chrome's CHIPS and allow sessions to continue to work within iframes.\r\n\r\nExample usage might be:\r\n\r\n```python\r\napp.config['SESSION_COOKIE_SAMESITE'] = \"None\"\r\napp.config['SESSION_COOKIE_SECURE'] = True\r\napp.config['SESSION_COOKIE_PARTITIONED'] = True # add this?\r\n```\r\n",
+  "truth_src": [
+    "src/flask/app.py",
+    "src/flask/sessions.py"
+  ],
+  "truth_tests": [
+    "tests/test_basic.py"
+  ]
+}
