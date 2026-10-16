@@ -3,7 +3,7 @@ output is one review ending in `RISK: low|medium|high`. If no model is available
 from __future__ import annotations
 import argparse, json, pathlib, re
 from .ghio import upsert_comment
-from .llm import LLMUnavailable, complete
+from .llm import LLMUnavailable, complete, have_key
 
 SYSTEM = """You are the Skeptic. Your only job is to find ways a code change could break production. You cannot approve, merge or edit anything.
 You get the diff and facts from a code graph: blast radius, import radius, tests, risk, history, earlier attempts.
@@ -54,7 +54,7 @@ FINDING = re.compile(r"^\s*\d+[.)]\s*(?P<text>.+?)\s*$")
 IDENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{2,60}$")
 
 
-def parse_findings(text: str, files: set[str]) -> list[dict]:
+def parse_findings(text: str, files: set[str], walked: set[str] | None = None) -> list[dict]:
     """Numbered lines 'text | file: x | test: y' -> [{text, file, test}]. A file not in the input or an odd test name becomes None."""
     out = []
     for line in text.splitlines():
@@ -64,7 +64,7 @@ def parse_findings(text: str, files: set[str]) -> list[dict]:
         parts = [p.strip() for p in m.group("text").split("|")]
         if re.match(r"(?i)^(no|nothing|none)\b", parts[0]):      # "No functional change": a statement, not a finding
             continue
-        f = {"text": parts[0][:300], "file": None, "test": None}
+        f = {"text": parts[0][:300], "file": None, "test": None, "via": None}
         for p in parts[1:]:
             k, _, v = p.partition(":")
             v = v.strip().strip("`")
@@ -72,6 +72,8 @@ def parse_findings(text: str, files: set[str]) -> list[dict]:
                 f["file"] = v
             elif k.strip().lower() == "test" and IDENT.match(v):
                 f["test"] = v
+            elif k.strip().lower() == "via" and v in (walked or set()):     # a finding may only cite a graph walk that actually happened
+                f["via"] = v
         out.append(f)
     return out[:4]
 
@@ -79,14 +81,85 @@ def parse_findings(text: str, files: set[str]) -> list[dict]:
 def render(findings: list[dict]) -> str:
     L = []
     for i, f in enumerate(findings, 1):
-        L.append(f"{i}. {f['text']}" + (f" (`{f['file']}`)" if f["file"] else ""))
+        L.append(f"{i}. {f['text']}" + (f" (`{f['file']}`)" if f["file"] else "") + (f" [graph walk: {f['via']}]" if f.get("via") else ""))
     tests = [(i, f["test"]) for i, f in enumerate(findings, 1) if f["test"]]
     if tests:
         L += ["", "Suggested tests (not written; a person or the agent can add them):"] + [f"- `{t}`: would catch concern {i}" for i, t in tests]
     return "\n".join(L)
 
 
-def review(ctx: dict) -> tuple[str, str, list[dict]]:
+WALK_SYSTEM = """You are the Skeptic. Your only job is to find ways a code change could break production. You cannot approve, merge or edit anything.
+You get the diff and the names of the edited symbols. You do NOT get the blast radius, the tests or the history: walk the code graph for them
+with the tools (blast_radius, impacted_tests, path_between, recall, read_symbol, list_symbols). Make at most 4 tool calls, then answer.
+Write at most 4 findings, one per line, in exactly this form:
+1. <one sentence naming the function, test or caller and why it could break> | file: <path from the input, or none> | test: <a snake_case test name that would catch it> | via: <the tool whose result supports it, or none>
+Only claim what the diff or a tool result shows. If you found no real risk, write one line starting with "No" instead of inventing findings.
+Finish with exactly one last line: RISK: low, RISK: medium or RISK: high.
+high = the change likely breaks behaviour or tests fail. medium = real unknowns: untested code, a central function, many callers or importers, or an earlier failed attempt. low = small and covered by tests that pass."""
+
+WALK_TOOLS = ("blast_radius", "impacted_tests", "path_between", "recall", "read_symbol", "list_symbols")
+MAX_WALKS = 4
+
+
+def walk_review(ctx: dict, tb, provider=None, client=None) -> tuple[str, str, list[dict], list[str]]:
+    """The Skeptic with read-only graph tools. Returns (body, risk, findings, walks); walks lists the calls it actually made."""
+    from .llm_agent import _compact, _dispatch, make_provider
+    from .specs import ACTION_TOOLS, GRAPH_TOOLS
+    tools = [t for t in GRAPH_TOOLS + ACTION_TOOLS if t["name"] in WALK_TOOLS]
+    p = make_provider(provider, None, client, tools=tools, system=WALK_SYSTEM)
+    start = (f"PR: {ctx['title']}\nEdited symbols: {', '.join(ctx['edited']) or 'none'}\n"
+             f"Files touched (use these exact paths in `file:`): {', '.join(ctx.get('files', [])) or 'none'}\n"
+             f"New source files: {', '.join(ctx['new_files']) or 'none'}; tests changed in this PR: {', '.join(ctx['changed_tests']) or 'none'}\n"
+             f"Tests that failed because of this PR: {', '.join(ctx['tests']['new_failures']) or 'none'}\n\nDIFF:\n{ctx['diff'][:6000]}")
+    p.start(start)
+    walks: list[dict] = []
+    text = ""
+    for _ in range(MAX_WALKS + 2):
+        uses = p.step()
+        if not uses:
+            text = p.last_text
+            break
+        outs = []
+        for u in uses:
+            if u["name"] in WALK_TOOLS and len(walks) < MAX_WALKS:
+                walks.append({"tool": u["name"], "args": u["input"]})
+                outs.append((u["id"], _compact(_dispatch(tb, u["name"], u["input"]))))
+            else:        # off the allowlist, or out of walks: say so and make it answer
+                outs.append((u["id"], '{"outcome":"error","note":"no more graph walks: answer now in the required format"}'))
+        p.results(outs)
+    else:
+        p.nudge("Answer now in the required format. No more tool calls.")
+        p.step()
+        text = p.last_text
+    called = {w["tool"] for w in walks}
+    m = list(RISK_RE.finditer(text))
+    if not m and text:
+        try:
+            again = complete("Reply with exactly one line: RISK: low, RISK: medium or RISK: high.", f"{start[:3000]}\n\nYour review:\n{text}", max_tokens=400)
+            w = re.search(r"\b(low|medium|high)\b", again, re.I)
+            m = [w] if w else []
+        except Exception:
+            m = []
+    risk = m[-1].group(1).lower() if m else "unknown"
+    body = RISK_RE.sub("", text).strip()
+    findings = parse_findings(body, set(ctx.get("files", [])) | set(ctx["new_files"]) | set(ctx["changed_tests"]), called)
+    shown = render(findings) if findings else re.sub(r"\s*\|\s*file:.*$", "", body, flags=re.M)
+    trail = ("\n\n_Graph walks the Skeptic made: " + ", ".join(f"`{w['tool']}`" for w in walks) + "._") if walks else "\n\n_The Skeptic made no graph walks, so its findings rest on the diff alone._"
+    return (f"{shown}{trail}\n\n<!-- keel:findings {json.dumps(findings)} -->\nRISK: {risk}", risk, findings, [w["tool"] for w in walks])
+
+
+def review(ctx: dict, tb=None) -> tuple[str, str, list[dict]]:
+    """With a Toolbox on the base graph the Skeptic walks it; without one it reads the facts prepared in context.json."""
+    if tb is not None and have_key():
+        try:
+            body, risk, findings, _ = walk_review(ctx, tb)
+            return body, risk, findings
+        except Exception as e:      # fall back to the one-shot review rather than posting nothing
+            print(f"graph-walk review failed ({type(e).__name__}); using the one-shot review")
+    return review_oneshot(ctx)
+
+
+def review_oneshot(ctx: dict) -> tuple[str, str, list[dict]]:
     """-> (body, risk, findings) with risk in low|medium|high|unknown."""
     try:
         text = complete(SYSTEM, facts(ctx), max_tokens=1500)    # reasoning models spend part of this before they write the answer
@@ -114,13 +187,44 @@ def review(ctx: dict) -> tuple[str, str, list[dict]]:
     return (f"{shown}{note}\n\n<!-- keel:findings {json.dumps(findings)} -->\nRISK: {risk}", risk, findings)
 
 
+def open_graph(ctx: dict, repo_dir: str, subdir: str):
+    """Build the base commit's graph and return (Toolbox, cleanup). (None, no-op) if FalkorDB is not reachable."""
+    import pathlib, shutil, subprocess, tempfile
+    try:
+        from . import graph as G, pipeline as P
+        from .tools import Toolbox
+        db = G.connect(); db.list_graphs()
+    except Exception as e:
+        print(f"no graph to walk ({type(e).__name__}); the Skeptic will read the prepared facts")
+        return None, (lambda: None)
+    repo = pathlib.Path(repo_dir).resolve()
+    tmp = pathlib.Path(tempfile.mkdtemp(prefix="keel-skeptic-")).resolve()
+    wt = tmp / "base"
+    subprocess.run(["git", "worktree", "add", "--detach", "-f", str(wt), ctx["base"]], cwd=repo, check=True, capture_output=True)
+    case = f"skeptic{ctx['pr']}"
+    P.build_for(db, "demoapp", case, repo, wt, ctx["base"], subdir=subdir)
+    tb = Toolbox(db, "demoapp", case, wt / subdir, now=ctx.get("at"))
+
+    def cleanup():
+        subprocess.run(["git", "worktree", "remove", "--force", str(wt)], cwd=repo, capture_output=True)
+        shutil.rmtree(tmp, ignore_errors=True)
+    return tb, cleanup
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="keel.skeptic")
     ap.add_argument("--context", default="ci-out/context.json"); ap.add_argument("--repo"); ap.add_argument("--pr")
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--repo-dir", help="a git checkout with the base commit: build its graph so the Skeptic can walk it"); ap.add_argument("--subdir", default="demo-app")
     a = ap.parse_args(argv)
     ctx = json.loads(pathlib.Path(a.context).read_text())
-    body, risk, _ = review(ctx)
+    tb, cleanup = None, (lambda: None)
+    if a.repo_dir:
+        tb, cleanup = open_graph(ctx, a.repo_dir, a.subdir)
+    try:
+        body, risk, _ = review(ctx, tb)
+    finally:
+        cleanup()
     pathlib.Path(a.context).with_name("skeptic.txt").write_text(body)
     print(body)
     if not a.dry_run and a.repo and a.pr:

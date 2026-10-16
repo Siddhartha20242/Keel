@@ -143,7 +143,7 @@ def test_skeptic_findings_parse_and_reject_unknown_files():
             "2. A caller may rely on the old dedupe | file: src/not/in/the/input.py | test: not a name\n"
             "RISK: medium")
     fs = skeptic.parse_findings(text, {"src/shortener/server.py"})
-    assert fs[0] == {"text": "Handler.do_POST calls shorten with unchecked input", "file": "src/shortener/server.py", "test": "test_post_rejects_huge_body"}
+    assert fs[0] == {"text": "Handler.do_POST calls shorten with unchecked input", "file": "src/shortener/server.py", "test": "test_post_rejects_huge_body", "via": None}
     assert fs[1]["file"] is None and fs[1]["test"] is None                 # invented file and malformed test name are dropped
     out = skeptic.render(fs)
     assert "Suggested tests" in out and "`test_post_rejects_huge_body`" in out and "concern 1" in out

@@ -106,6 +106,7 @@ jobs:
           name: ci-context
           path: ci-out/context.json
 
+  # The Skeptic walks the base commit's code graph with read-only tools instead of reading prepared facts. It needs its own graph.
   skeptic:
     needs: analyze
     if: github.event.pull_request.head.repo.full_name == github.repository
@@ -113,18 +114,23 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+    services:
+      falkordb:
+        image: falkordb/falkordb:latest
+        ports: ["6379:6379"]
     steps:
       - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
-      - run: pip install openai anthropic
+      - run: pip install -r requirements-ci.txt
       - uses: actions/download-artifact@v4
         with: { name: ci-context, path: ci-out }
       - name: skeptic review
         env:
           GH_TOKEN: ${{ github.token }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: python -m keel.skeptic --repo "${{ github.repository }}" --pr "${{ github.event.pull_request.number }}"
+        run: python -m keel.skeptic --repo "${{ github.repository }}" --pr "${{ github.event.pull_request.number }}" --repo-dir . --subdir demo-app
 
   # Runs even if the Skeptic job failed: no review then means "human approval required", never a silent pass.
   risk-gate:

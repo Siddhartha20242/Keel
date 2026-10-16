@@ -28,13 +28,14 @@ All of this ran on this repo, on a small URL shortener in [`demo-app/`](demo-app
 - **Fix.** A person adds a label, or the Fixer reacts when the unit tests fail. The agent opens a draft PR only if the tests that
   failed now pass.
 - **Pull request.** CI runs tests, image and SBOM, CodeQL, secret scanning and `pip-audit`. A graph analysis maps the diff onto
-  the code at the PR's base, runs the tests the graph selects, and scores the risk. The Skeptic tries to break the change and
-  suggests the test that would catch each problem. The gate reads its verdict, trusts only the bot's own comment, and fails on
+  the code at the PR's base, runs the tests the graph selects, and scores the risk. The Skeptic tries to break the change: it walks the code
+  graph with read-only tools, cites the walk behind each finding, and suggests the test that would catch each problem. The gate reads its verdict, trusts only the bot's own comment, and fails on
   `RISK: high` or on tests the PR broke. The Reporter lists what a person still has to decide.
 - **Release.** After a person merges, the image is built, run, smoke tested and published, then smoke tested every hour. A failing
   check opens an incident issue.
-- **Memory.** When a PR closes, what happened to it goes into a hash-chained ledger on a `keel-memory` branch, and later triage
-  and analysis recall it.
+- **Memory.** When a PR closes, what happened to it goes into a hash-chained ledger and later triage and analysis recall it. Point Keel
+  at a FalkorDB with `KEEL_STORE_HOST` (for example FalkorDB Cloud) and that graph is the source of truth, with the file on the
+  `keel-memory` branch rewritten from it as a backup. With none set, the file is the store.
 
 The agent never writes Cypher. It picks from a fixed set of tools, and any symbol it names is checked against the graph first, so
 an invented name returns `unknown_symbol` and runs nothing.
@@ -50,6 +51,29 @@ Each of the 12 issues is a real pallets/flask issue, replayed at the parent of i
 - **Test selection can be large** for central code (up to about 300 of 370 tests), so the agent runs the 40 most focused first (79%).
 
 Reproduce: `python -m keel.evaluate --rebuild`.
+
+## Do we need a graph database?
+
+I took FalkorDB out and redid the same decisions with plain Python dicts on the same extracted data (`python -m keel.ablation`).
+
+| 12 real Flask cases | plain dicts | FalkorDB |
+|---|---|---|
+| tests selected, blast radius, risk score, lane | identical on 12 of 12 | identical |
+| time for those decisions | 0.3 to 2.6 ms | 37 to 883 ms (median 53) |
+| build the graph | 13 ms | 345 ms |
+
+| synthetic, 100k nodes and 400k edges | plain dicts | FalkorDB |
+|---|---|---|
+| PageRank | 2,633 ms | **23 ms** |
+| weakly connected components | 211 ms | **43 ms** |
+| callers within 3 hops, per query | **0.04 ms** | 5.3 ms with its BFS algorithm |
+| load | **257 ms** | 15.7 s |
+
+So at our real scale (about 500 symbols) a dict gives the same answers, faster. FalkorDB pulls ahead on graph algorithms as the
+graph grows, and it is what makes the ledger and memory one shared, persistent, queryable store that the agents' tools and a human
+can both ask ("why did this ship?"). If you only wanted the numbers, a dict would do. One finding is against my own code: the
+`*1..N` Cypher pattern my queries use took 446 ms per query at 30k nodes where FalkorDB's BFS took 3 ms, so I would switch those
+queries to BFS before pointing this at a large repo.
 
 ## The graph
 
@@ -90,7 +114,8 @@ For the GitHub pipeline, add an `OPENAI_API_KEY` repository secret (any OpenAI-c
   which is why the gate leans on the graph's numbers and a person reads the findings.
 - The gate only blocks a merge if branch protection requires its check, which this repo does not set.
 - The risk weights and lane thresholds are hand-set; there is no ground truth to score them against.
-- I have not measured anything on a large monorepo.
+- I have not run Keel on a large monorepo; the 100k-node numbers above are synthetic.
+- The persistent store is tested against a local FalkorDB container, not FalkorDB Cloud.
 
 ## AI assistance
 

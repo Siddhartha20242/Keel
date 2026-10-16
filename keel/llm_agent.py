@@ -50,19 +50,20 @@ def _dispatch(tb: Toolbox, name: str, a: dict) -> dict:
 
 class _Anthropic:
     """Normalises Anthropic's tool-use messages to (tool_calls, append_results)."""
-    def __init__(self, model, client=None):
+    def __init__(self, model, client=None, tools=None, system=None):
         if client is None:
             import anthropic
             client = anthropic.Anthropic()
-        self.c, self.model = client, model
-        self.tools = [{**t} for t in GRAPH_TOOLS + ACTION_TOOLS]
+        self.c, self.model, self.system, self.last_text = client, model, system or SYSTEM, ""
+        self.tools = [{**t} for t in (tools or GRAPH_TOOLS + ACTION_TOOLS)]
 
     def start(self, user):
         self.msgs = [{"role": "user", "content": user}]
 
     def step(self):
-        r = self.c.messages.create(model=self.model, max_tokens=4000, system=SYSTEM, tools=self.tools, messages=self.msgs)
+        r = self.c.messages.create(model=self.model, max_tokens=4000, system=self.system, tools=self.tools, messages=self.msgs)
         self.msgs.append({"role": "assistant", "content": r.content})
+        self.last_text = "".join(getattr(b, "text", "") for b in r.content if b.type == "text")
         return [{"id": b.id, "name": b.name, "input": b.input} for b in r.content if b.type == "tool_use"]
 
     def nudge(self, text):
@@ -75,21 +76,22 @@ class _Anthropic:
 class _OpenAICompatible:
     """Any OpenAI-compatible chat-completions endpoint (OpenAI, Gemini, Groq, OpenRouter, Together, DeepSeek, Ollama...).
     Configure with OPENAI_API_KEY, OPENAI_BASE_URL and KEEL_MODEL."""
-    def __init__(self, model, client=None):
+    def __init__(self, model, client=None, tools=None, system=None):
         if client is None:
             import openai
             client = openai.OpenAI()
-        self.c, self.model = client, model
+        self.c, self.model, self.system, self.last_text = client, model, system or SYSTEM, ""
         self.tools = [{"type": "function", "function": {"name": t["name"], "description": t["description"], "parameters": t["input_schema"]}}
-                      for t in GRAPH_TOOLS + ACTION_TOOLS]
+                      for t in (tools or GRAPH_TOOLS + ACTION_TOOLS)]
 
     def start(self, user):
-        self.msgs = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": user}]
+        self.msgs = [{"role": "system", "content": self.system}, {"role": "user", "content": user}]
 
     def step(self):
         extra = {"reasoning_effort": "low"} if "gpt-oss" in self.model else {}     # keep reasoning out of the reply
         r = self.c.chat.completions.create(model=self.model, tools=self.tools, messages=self.msgs, temperature=0, **extra)
         m = r.choices[0].message
+        self.last_text = m.content or ""
         calls = m.tool_calls or []
         self.msgs.append({"role": "assistant", "content": m.content or "",
                           **({"tool_calls": [{"id": c.id, "type": "function", "function": {"name": c.function.name, "arguments": c.function.arguments}} for c in calls]} if calls else {})})
@@ -110,12 +112,12 @@ class _OpenAICompatible:
             self.msgs.append({"role": "tool", "tool_call_id": i, "content": c})
 
 
-def make_provider(provider: str | None, model: str | None, client=None):
+def make_provider(provider: str | None, model: str | None, client=None, tools=None, system=None):
     import os
     provider = provider or os.environ.get("KEEL_PROVIDER") or ("openai" if os.environ.get("OPENAI_API_KEY") else "anthropic")
     if provider == "anthropic":
-        return _Anthropic(model or os.environ.get("KEEL_MODEL", "claude-sonnet-5-5"), client)
-    return _OpenAICompatible(model or os.environ.get("KEEL_MODEL", "gpt-4o"), client)
+        return _Anthropic(model or os.environ.get("KEEL_MODEL", "claude-sonnet-5-5"), client, tools, system)
+    return _OpenAICompatible(model or os.environ.get("KEEL_MODEL", "gpt-4o"), client, tools, system)
 
 
 def run_agent(tb: Toolbox, case: dict, issue_text: str, model: str | None = None, client=None, provider: str | None = None) -> dict:

@@ -19,4 +19,4 @@ jobs:
         with: { python-version: "3.12" }
       - run: pip install -r requirements-ci.txt
       - name: unit tests (no database)
-        run: python -m pytest tests/test_unit.py tests/test_pipeline_units.py tests/test_ledger.py -q
+        run: python -m pytest tests/test_unit.py tests/test_pipeline_units.py tests/test_ledger.py tests/test_store.py tests/test_skeptic_walks.py -q
