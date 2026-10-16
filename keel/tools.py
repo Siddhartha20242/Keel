@@ -2,7 +2,7 @@
 validated arguments. Names are resolved against the graph before anything runs, so no model string is ever concatenated
 into a query."""
 from __future__ import annotations
-import datetime as dt, math, pathlib, re, subprocess, sys, time
+import datetime as dt, json, math, pathlib, re, subprocess, sys, time
 from collections import defaultdict
 from . import graph as G, risk
 
@@ -234,8 +234,9 @@ class Toolbox:
     def remember(self, issue: str, summary: str, outcome: str, lane: str, symbols: list[str]) -> dict:
         qn, _ = self.resolve(symbols)
         aid = f"{self.case_id}-{int(time.time())}"
+        rec = {"id": aid, "title": issue, "summary": summary[:500], "outcome": outcome, "lane": lane, "at": self.now, "symbols": qn}
         self.mem.query(G.read_query("mem_remember"), {"id": aid, "issue": issue, "summary": summary[:500], "outcome": outcome,
-                                                     "lane": lane, "at": self.now, "qnames": qn or ["<none>"]})
+                                                     "lane": lane, "at": self.now, "qnames": qn or ["<none>"], "json": json.dumps(rec, sort_keys=True)})
         return {"outcome": "stored", "id": aid, "symbols": qn}
 
     # ------------------------------------------------------------- actions

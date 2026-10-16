@@ -29,9 +29,9 @@ def build(db, case_id: str, sha: str, repo="flask", with_coverage=True):
     return build_for(db, repo, case_id, REPO_DIR, wd, sha, subdir="", with_coverage=with_coverage)
 
 
-def build_for(db, repo: str, case_id: str, git_dir: pathlib.Path, workdir: pathlib.Path, sha: str, subdir: str = "", with_coverage=True):
-    """Build the code graph for `subdir` of the checkout at `workdir` (a worktree of `sha` in `git_dir`).
-    Code, coverage and history all come from that commit only."""
+def extract_all(git_dir: pathlib.Path, workdir: pathlib.Path, sha: str, subdir: str = "", with_coverage: bool = True):
+    """Everything the graph is built from, as plain data: code, history, per-test coverage, meta. Used by the graph loader and by the
+    in-memory ablation, so both see exactly the same inputs."""
     root = workdir / subdir if subdir else workdir
     code = extract_code(root)
     hist = extract_history(workdir, sha, prefix=f"{subdir.rstrip('/')}/" if subdir else "")
@@ -43,6 +43,12 @@ def build_for(db, repo: str, case_id: str, git_dir: pathlib.Path, workdir: pathl
         if run_coverage(root, cov):
             covers = covers_edges(root, cov, code["symbols"])
     day = subprocess.run(["git", "log", "-1", "--format=%ad", "--date=short", sha], cwd=git_dir, capture_output=True, text=True).stdout.strip()
-    meta = {"repo": repo, "ref": sha, "ref_ts": G._ts(day)}
-    g = G.load_code_graph(db, G.code_graph_name(repo, case_id), code, hist, covers, meta)
+    return code, hist, covers, {"ref": sha, "ref_ts": G._ts(day)}
+
+
+def build_for(db, repo: str, case_id: str, git_dir: pathlib.Path, workdir: pathlib.Path, sha: str, subdir: str = "", with_coverage=True):
+    """Build the code graph for `subdir` of the checkout at `workdir` (a worktree of `sha` in `git_dir`).
+    Code, coverage and history all come from that commit only."""
+    code, hist, covers, meta = extract_all(git_dir, workdir, sha, subdir, with_coverage)
+    g = G.load_code_graph(db, G.code_graph_name(repo, case_id), code, hist, covers, {"repo": repo, **meta})
     return g, G.stats(g)

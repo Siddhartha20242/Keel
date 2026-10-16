@@ -1,0 +1,200 @@
+{
+ "real": {
+  "cases": [
+   {
+    "case": "1af8f957",
+    "tests_equal": true,
+    "tests": 0,
+    "blast_equal": true,
+    "score_graph": 0.367,
+    "score_mem": 0.367,
+    "lane_equal": true,
+    "ms_graph": 39,
+    "ms_mem": 0.4
+   },
+   {
+    "case": "28d5a4d7",
+    "tests_equal": true,
+    "tests": 3,
+    "blast_equal": true,
+    "score_graph": 0.313,
+    "score_mem": 0.313,
+    "lane_equal": true,
+    "ms_graph": 92,
+    "ms_mem": 1.0
+   },
+   {
+    "case": "2c316030",
+    "tests_equal": true,
+    "tests": 26,
+    "blast_equal": true,
+    "score_graph": 0.456,
+    "score_mem": 0.456,
+    "lane_equal": true,
+    "ms_graph": 114,
+    "ms_mem": 0.4
+   },
+   {
+    "case": "4995a775",
+    "tests_equal": true,
+    "tests": 244,
+    "blast_equal": true,
+    "score_graph": 0.542,
+    "score_mem": 0.542,
+    "lane_equal": true,
+    "ms_graph": 52,
+    "ms_mem": 0.7
+   },
+   {
+    "case": "4f7156f2",
+    "tests_equal": true,
+    "tests": 245,
+    "blast_equal": true,
+    "score_graph": 0.545,
+    "score_mem": 0.545,
+    "lane_equal": true,
+    "ms_graph": 53,
+    "ms_mem": 0.7
+   },
+   {
+    "case": "53b8f082",
+    "tests_equal": true,
+    "tests": 192,
+    "blast_equal": true,
+    "score_graph": 0.153,
+    "score_mem": 0.153,
+    "lane_equal": true,
+    "ms_graph": 86,
+    "ms_mem": 0.4
+   },
+   {
+    "case": "6a649690",
+    "tests_equal": true,
+    "tests": 243,
+    "blast_equal": true,
+    "score_graph": 0.545,
+    "score_mem": 0.545,
+    "lane_equal": true,
+    "ms_graph": 883,
+    "ms_mem": 2.6
+   },
+   {
+    "case": "9822a035",
+    "tests_equal": true,
+    "tests": 6,
+    "blast_equal": true,
+    "score_graph": 0.448,
+    "score_mem": 0.448,
+    "lane_equal": true,
+    "ms_graph": 39,
+    "ms_mem": 0.5
+   },
+   {
+    "case": "9efc1ebe",
+    "tests_equal": true,
+    "tests": 188,
+    "blast_equal": true,
+    "score_graph": 0.417,
+    "score_mem": 0.417,
+    "lane_equal": true,
+    "ms_graph": 47,
+    "ms_mem": 0.3
+   },
+   {
+    "case": "c7a53888",
+    "tests_equal": true,
+    "tests": 14,
+    "blast_equal": true,
+    "score_graph": 0.153,
+    "score_mem": 0.153,
+    "lane_equal": true,
+    "ms_graph": 37,
+    "ms_mem": 0.4
+   },
+   {
+    "case": "daf1510a",
+    "tests_equal": true,
+    "tests": 20,
+    "blast_equal": true,
+    "score_graph": 0.153,
+    "score_mem": 0.153,
+    "lane_equal": true,
+    "ms_graph": 187,
+    "ms_mem": 0.3
+   },
+   {
+    "case": "e82db2ca",
+    "tests_equal": true,
+    "tests": 248,
+    "blast_equal": true,
+    "score_graph": 0.536,
+    "score_mem": 0.536,
+    "lane_equal": true,
+    "ms_graph": 43,
+    "ms_mem": 0.5
+   }
+  ],
+  "load_ms_graph": 345,
+  "build_ms_mem": 13
+ },
+ "synthetic": [
+  {
+   "nodes": 1000,
+   "edges": 4000,
+   "mem_build_ms": 1,
+   "mem_3hop_ms": 0.008,
+   "mem_pagerank_ms": 8,
+   "mem_wcc_ms": 1,
+   "graph_load_ms": 57,
+   "graph_3hop_bfs_ms": 0.603,
+   "bfs_equal": true,
+   "graph_3hop_pattern_ms": 14.557,
+   "pattern_equal": true,
+   "graph_pagerank_ms": 2,
+   "graph_wcc_ms": 1
+  },
+  {
+   "nodes": 10000,
+   "edges": 40000,
+   "mem_build_ms": 8,
+   "mem_3hop_ms": 0.012,
+   "mem_pagerank_ms": 104,
+   "mem_wcc_ms": 14,
+   "graph_load_ms": 1240,
+   "graph_3hop_bfs_ms": 0.482,
+   "bfs_equal": true,
+   "graph_3hop_pattern_ms": 106.961,
+   "pattern_equal": true,
+   "graph_pagerank_ms": 2,
+   "graph_wcc_ms": 10
+  },
+  {
+   "nodes": 30000,
+   "edges": 120000,
+   "mem_build_ms": 47,
+   "mem_3hop_ms": 0.019,
+   "mem_pagerank_ms": 458,
+   "mem_wcc_ms": 49,
+   "graph_load_ms": 3808,
+   "graph_3hop_bfs_ms": 2.926,
+   "bfs_equal": true,
+   "graph_3hop_pattern_ms": 445.882,
+   "pattern_equal": true,
+   "graph_pagerank_ms": 11,
+   "graph_wcc_ms": 25
+  },
+  {
+   "nodes": 100000,
+   "edges": 400000,
+   "mem_build_ms": 257,
+   "mem_3hop_ms": 0.038,
+   "mem_pagerank_ms": 2633,
+   "mem_wcc_ms": 211,
+   "graph_load_ms": 15741,
+   "graph_3hop_bfs_ms": 5.32,
+   "bfs_equal": true,
+   "graph_pagerank_ms": 23,
+   "graph_wcc_ms": 43
+  }
+ ]
+}

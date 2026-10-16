@@ -24,6 +24,7 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}   # a closed, unmerged PR has no merge ref to check out
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
+      - run: pip install falkordb      # only used when a persistent store is configured
       - name: prepare the memory branch
         env:
           GH_TOKEN: ${{ github.token }}
@@ -36,6 +37,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           OUTCOME: ${{ github.event.pull_request.merged && 'merged' || 'rejected' }}
+          # Optional persistent FalkorDB (e.g. FalkorDB Cloud). Only this job, which runs main's code and never a PR's, gets the credentials.
+          # With none set, memory and the ledger live in the JSONL files on the keel-memory branch, as before.
+          KEEL_STORE_HOST: ${{ secrets.KEEL_STORE_HOST }}
+          KEEL_STORE_PORT: ${{ secrets.KEEL_STORE_PORT }}
+          KEEL_STORE_USERNAME: ${{ secrets.KEEL_STORE_USERNAME }}
+          KEEL_STORE_PASSWORD: ${{ secrets.KEEL_STORE_PASSWORD }}
+          KEEL_STORE_SSL: ${{ vars.KEEL_STORE_SSL }}
         run: python -m keel.memory_cli record --repo "${{ github.repository }}" --pr "${{ github.event.pull_request.number }}" --outcome "$OUTCOME" --file mem/memory.jsonl --ledger mem/ledger.jsonl
       - name: push
         working-directory: mem

@@ -38,6 +38,39 @@ def load_into_graph(db, repo: str, records: list[dict]) -> int:
         if not r.get("symbols"):
             continue
         g.query(q, {"id": str(r.get("id", n)), "issue": str(r.get("title", ""))[:200], "summary": str(r.get("summary", ""))[:500],
-                    "outcome": r.get("outcome", "unknown"), "lane": r.get("lane", ""), "at": r.get("at", ""), "qnames": r["symbols"]})
+                    "outcome": r.get("outcome", "unknown"), "lane": r.get("lane", ""), "at": r.get("at", ""), "qnames": r["symbols"],
+                    "json": json.dumps(r, sort_keys=True)})
         n += 1
     return n
+
+
+def memory_graph(db, repo: str):
+    from . import graph as G
+    return db.select_graph(G.memory_graph_name(repo))
+
+
+def record_attempt(db, repo: str, rec: dict) -> None:
+    """Write one attempt into the (persistent) memory graph without clearing it."""
+    from . import graph as G
+    if not rec.get("symbols"):
+        return
+    memory_graph(db, repo).query(G.read_query("mem_remember"), {
+        "id": str(rec.get("id", "")), "issue": str(rec.get("title", ""))[:200], "summary": str(rec.get("summary", ""))[:500],
+        "outcome": rec.get("outcome", "unknown"), "lane": rec.get("lane", ""), "at": rec.get("at", ""), "qnames": rec["symbols"],
+        "json": json.dumps(rec, sort_keys=True)})
+
+
+def read_attempts_graph(db, repo: str) -> list[dict]:
+    """Every recorded attempt, oldest first, as the full records the JSONL backup holds."""
+    try:
+        rows = memory_graph(db, repo).ro_query("MATCH (a:Attempt) WHERE a.json IS NOT NULL RETURN DISTINCT a.json, a.at, a.id ORDER BY a.at, a.id").result_set
+    except Exception:
+        return []
+    return [json.loads(r[0]) for r in rows]
+
+
+def write_all(path, recs: list[dict]) -> None:
+    pathlib.Path(path).parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w") as f:
+        for r in recs:
+            f.write(json.dumps(r, sort_keys=True) + "\n")
