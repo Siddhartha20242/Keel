@@ -7,7 +7,7 @@ CODE_RE = re.compile(r"^[0-9a-zA-Z]{1,12}$")
 
 
 def encode(n: int) -> str:
-    """Base62 of a non-negative integer."""
+    """Base62 of a non-negative integer (0 encodes to "0")."""
     if n < 0:
         raise ValueError("n must be >= 0")
     if n == 0:
