@@ -46,12 +46,12 @@ PROVEN means I ran it and saw the result below. WRITTEN means the code exists bu
 | Ablation: synthetic graphs, 1k to 100k nodes (avg degree 4) | same command | at 100k nodes / 400k edges: PageRank 2,633 ms (dicts) vs 23 ms; WCC 211 vs 43 ms; 3-hop callers 0.04 ms vs 5.3 ms (FalkorDB BFS); load 257 ms vs 15.7 s. The all-paths Cypher pattern my queries use (`*1..3`) took 107 ms at 10k and 446 ms at 30k nodes, against 3 ms for BFS, same counts. Not yet changed in the real queries. The 100k run skipped the pattern query as too slow |
 | Persistent store for ledger and memory (local FalkorDB container as the store) | `python -m pytest tests/test_store.py`, plus `KEEL_STORE_HOST=localhost python -m keel.ledger explain --store` | records chain and verify from the graph; editing a stored record, or deleting a NEXT edge, is detected; an append to a broken ledger is refused; the JSONL backup is rewritten from the graph and equals it; an empty store is bootstrapped from an existing backup; with no store it falls back to the files |
 | Skeptic that walks the graph (live model, local) | `python -m keel.skeptic --repo-dir . --dry-run` on the PR #2 context with `gpt-oss-20b` | called `blast_radius`, found `Handler.do_POST` through it, and cited the walk on each finding. A finding that cites a walk it did not make has the citation dropped (tested with a scripted model) |
+| **On GitHub:** the graph-walking Skeptic (its own FalkorDB service in the job, `gpt-oss-20b`) | fresh commit on PR #2 | every finding cites `[graph walk: blast_radius]`; the comment lists the walks it made; gate blocked the PR on the failing tests. The verdict was `medium` here and `high` on an earlier run of the same PR, so the model's verdict is not stable; one finding was speculative ("caching layers"). Also fixed: `test: none` was rendered as a suggested test |
 
 ## WRITTEN (code exists, not run)
 - The persistent store against **FalkorDB Cloud** (or any remote FalkorDB): only a local container was used. It needs the secrets
   `KEEL_STORE_HOST` (and optionally `KEEL_STORE_PORT`, `KEEL_STORE_USERNAME`, `KEEL_STORE_PASSWORD`) and the variable `KEEL_STORE_SSL`.
   Credentials go only to `memory.yml` (it runs main's code); PR-time analysis reads the JSONL snapshot, not the store.
-- The graph-walking Skeptic inside Actions (the `skeptic` job now has its own FalkorDB service). Pending a fresh run on GitHub.
 - Checks on the Fixer's own draft PR: a PR opened with the default token does not start `pr.yml` (PR #6 has no checks). A
   `KEEL_PAT` secret would start them; I have not set one.
 - `fix.yml` (the human `keel:fix` label) and the `incident` job: no label was applied and no smoke check has failed. An incident issue opened by the default token

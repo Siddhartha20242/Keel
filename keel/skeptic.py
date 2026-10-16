@@ -68,6 +68,8 @@ def parse_findings(text: str, files: set[str], walked: set[str] | None = None) -
         for p in parts[1:]:
             k, _, v = p.partition(":")
             v = v.strip().strip("`")
+            if v.lower() in ("none", "n/a", "na", "-", ""):       # the model's way of saying "nothing here"
+                continue
             if k.strip().lower() == "file" and v in files:
                 f["file"] = v
             elif k.strip().lower() == "test" and IDENT.match(v):

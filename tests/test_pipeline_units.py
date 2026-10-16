@@ -184,3 +184,9 @@ def test_failing_ids_parse_only_wellformed_pytest_ids():
     assert "tests/test_x.py::test_y" in ids                          # the injected tail never reaches an id
     assert not any(c in i for i in ids for c in "; \\")
     assert not any("passwd" in i or "glued" in i for i in ids)
+
+
+def test_none_is_not_a_test_name_or_a_file():
+    fs = skeptic.parse_findings("1. Callers might break | file: none | test: none | via: none", {"src/a.py"}, {"blast_radius"})
+    assert fs == [{"text": "Callers might break", "file": None, "test": None, "via": None}]
+    assert "Suggested tests" not in skeptic.render(fs)
