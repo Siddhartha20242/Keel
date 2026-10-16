@@ -132,11 +132,12 @@ For the GitHub pipeline, add an `OPENAI_API_KEY` repository secret (any OpenAI-c
 
 ## AI assistance
 
-I built this solo and used an AI coding assistant heavily: Claude Code (Claude Sonnet 5.5). It wrote most of the code, the
-queries, the tests, the diagrams and the first draft of this README, working from what I asked for. Groq's `gpt-oss` models
-are the models inside the agents.
+I used an AI coding assistant for most of the implementation: Claude Code (Claude Sonnet 5.5). It wrote the large majority of the code,
+queries, tests, diagrams and documentation, and all 28 commits in this repo are co-authored by it. Groq's `gpt-oss` models are the
+models inside the agents.
 
-What was mine: the problem and track, the idea of using a graph for the merge decision, Flask and its real issues as test
-material, the FalkorDB and API setup, running the live pipeline, and what to report. The assistant also found and fixed several
-bugs along the way, including one where the graph could see the fix it was supposed to predict. I am still going through the
-code so I can explain the graph model, the queries and the risk score myself.
+What was mine: the problem and the track, the idea of using a graph for the merge decision instead of for retrieval, choosing Flask and
+its real issues as test material, the FalkorDB, Docker and API setup, running the live pipeline, and deciding what to claim. I asked for
+weak results to be reported as they came out, and `STATUS.md` does that (the stemming and diff experiments that made things worse, the
+Fixer's wrong first attempt, the ablation showing a plain dict gives the same answers at this scale). The assistant also found and fixed
+several bugs while measuring, including one where the graph could see the fix it was supposed to predict.
