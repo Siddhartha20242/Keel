@@ -15,7 +15,7 @@ class Store:
     def shorten(self, url: str) -> str:
         url = normalize_url(url)
         with self._lock:
-            if url in self._by_url:
+            if url not in self._by_url:
                 return self._by_url[url]
             code = encode(self._next)
             self._next += 1
