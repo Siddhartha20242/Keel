@@ -59,21 +59,22 @@ I took FalkorDB out and redid the same decisions with plain Python dicts on the 
 | 12 real Flask cases | plain dicts | FalkorDB |
 |---|---|---|
 | tests selected, blast radius, risk score, lane | identical on 12 of 12 | identical |
-| time for those decisions | 0.3 to 2.6 ms | 37 to 883 ms (median 53) |
-| build the graph | 13 ms | 345 ms |
+| time for those decisions | 0.3 to 1.5 ms | 34 to 859 ms (median 54) |
+| build the graph | 8 ms | 342 ms |
 
 | synthetic, 100k nodes and 400k edges | plain dicts | FalkorDB |
 |---|---|---|
-| PageRank | 2,633 ms | **23 ms** |
-| weakly connected components | 211 ms | **43 ms** |
-| callers within 3 hops, per query | **0.04 ms** | 5.3 ms with its BFS algorithm |
-| load | **257 ms** | 15.7 s |
+| PageRank | 2,533 ms | **22 ms** |
+| weakly connected components | 229 ms | **48 ms** |
+| callers within 3 hops, per query | **0.02 ms** | 5.6 ms with its BFS algorithm |
+| load | **285 ms** | 17.0 s |
 
 So at our real scale (about 500 symbols) a dict gives the same answers, faster. FalkorDB pulls ahead on graph algorithms as the
 graph grows, and it is what makes the ledger and memory one shared, persistent, queryable store that the agents' tools and a human
 can both ask ("why did this ship?"). If you only wanted the numbers, a dict would do. One finding is against my own code: the
-`*1..N` Cypher pattern my queries use took 446 ms per query at 30k nodes where FalkorDB's BFS took 3 ms, so I would switch those
-queries to BFS before pointing this at a large repo.
+`*1..N` Cypher pattern took 446 ms per query at 30k nodes where FalkorDB's BFS took 3 ms, so the risk score's caller and importer counts
+now use BFS (identical answers on all 12 cases). The blast-radius and test-selection queries still use the slow pattern because they need
+the route and hop count of each caller; they would be the next to change before a large repo.
 
 ## The graph
 
