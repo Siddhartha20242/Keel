@@ -147,7 +147,28 @@ def walk_review(ctx: dict, tb, provider=None, client=None) -> tuple[str, str, li
     findings = parse_findings(body, set(ctx.get("files", [])) | set(ctx["new_files"]) | set(ctx["changed_tests"]), called)
     shown = render(findings) if findings else re.sub(r"\s*\|\s*file:.*$", "", body, flags=re.M)
     trail = ("\n\n_Graph walks the Skeptic made: " + ", ".join(f"`{w['tool']}`" for w in walks) + "._") if walks else "\n\n_The Skeptic made no graph walks, so its findings rest on the diff alone._"
-    return (f"{shown}{trail}\n\n<!-- keel:findings {json.dumps(findings)} -->\nRISK: {risk}", risk, findings, [w["tool"] for w in walks])
+    risk, raised = floor(risk, ctx)
+    note = f"\n\n_Verdict raised to {risk} by the graph: {raised}._" if raised else ""
+    return (f"{shown}{trail}{note}\n\n<!-- keel:findings {json.dumps(findings)} -->\nRISK: {risk}", risk, findings, [w["tool"] for w in walks])
+
+
+ORDER = {"unknown": -1, "low": 0, "medium": 1, "high": 2}
+
+
+def floor(risk: str, ctx: dict) -> tuple[str, str | None]:
+    """The model's verdict can be raised by what the graph and the tests already proved, never lowered. Returns (risk, why-it-was-raised).
+    A change that breaks the tests the graph selected is high, whatever the model says; untested new code or a graph lane of
+    human_review is at least medium. An 'unknown' verdict (model could not run) is left alone: the gate treats that as a human decision."""
+    if risk == "unknown":
+        return risk, None
+    want, why = risk, None
+    if ctx["tests"]["new_failures"]:
+        want, why = "high", "tests the graph selected now fail"
+    elif ctx["risk"]["lane"] == "human_review" and ORDER[risk] < ORDER["medium"]:
+        want, why = "medium", "the graph put this change in the human_review lane"
+    elif ctx["new_files"] and not ctx["changed_tests"] and ORDER[risk] < ORDER["medium"]:
+        want, why = "medium", "new source files come with no tests"
+    return (want, why) if ORDER[want] > ORDER[risk] else (risk, None)
 
 
 def review(ctx: dict, tb=None) -> tuple[str, str, list[dict]]:
@@ -186,6 +207,9 @@ def review_oneshot(ctx: dict) -> tuple[str, str, list[dict]]:
     unknown = sorted({t for t in TICK.findall(body) if t not in known_names(ctx)})
     note = f"\n\n_Names the graph and diff do not contain, treat with care: {', '.join('`'+u+'`' for u in unknown)}._" if unknown else ""
     # the findings travel with the comment (hidden JSON) so the audit ledger can store them as Finding nodes later
+    risk, raised = floor(risk, ctx)
+    if raised:
+        note += f"\n\n_Verdict raised to {risk} by the graph: {raised}._"
     return (f"{shown}{note}\n\n<!-- keel:findings {json.dumps(findings)} -->\nRISK: {risk}", risk, findings)
 
 

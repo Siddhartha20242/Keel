@@ -152,6 +152,8 @@ class Toolbox:
         if qn is None:
             return err
         sym = {r["symbol"]: r for r in self._ro(self.g, "risk_symbols", {"qnames": qn}, ("symbol", "pagerank", "symbols_below"))}
+        for r in sym.values():           # BFS returns no row for a symbol nothing calls
+            r["callers"], r["tests"] = 0, 0
         for r in self._ro(self.g, "risk_callers", {"qnames": qn}, ("symbol", "callers")):
             sym[r["symbol"]]["callers"] = r["callers"]
         for r in self._ro(self.g, "risk_tests", {"qnames": qn}, ("symbol", "tests")):
@@ -160,7 +162,8 @@ class Toolbox:
         paths = sorted({self.g.ro_query("MATCH (s:Symbol {qname:$q}) RETURN s.path", {"q": q}).result_set[0][0] for q in qn})
         files = self._ro(self.g, "risk_files", {"paths": paths, "now": self.ref_ts()}, ("file", "commits", "commits_last_year", "reverted", "last_touched"))
         total = self.g.ro_query("MATCH (s:Symbol {kind:'code'}) RETURN count(s)").result_set[0][0]
-        imp = self._ro(self.g, "import_radius", {"paths": paths}, ("file", "importers"))
+        imp = {r["file"]: r for r in self._ro(self.g, "import_radius", {"paths": paths}, ("file", "importers"))}
+        imp = [imp.get(p, {"file": p, "importers": 0}) for p in paths]
         total_src = self.g.ro_query("MATCH (f:File {kind:'src'}) RETURN count(f)").result_set[0][0]
         comp = risk.components(sym, files, total, imp, total_src)
         s = risk.score(comp)

@@ -190,3 +190,19 @@ def test_none_is_not_a_test_name_or_a_file():
     fs = skeptic.parse_findings("1. Callers might break | file: none | test: none | via: none", {"src/a.py"}, {"blast_radius"})
     assert fs == [{"text": "Callers might break", "file": None, "test": None, "via": None}]
     assert "Suggested tests" not in skeptic.render(fs)
+
+
+def _fctx(new_failures=(), lane="canary", new_files=(), changed_tests=()):
+    return {"tests": {"new_failures": list(new_failures)}, "risk": {"lane": lane}, "new_files": list(new_files), "changed_tests": list(changed_tests)}
+
+
+def test_verdict_is_raised_by_proven_facts_and_never_lowered():
+    f = skeptic.floor
+    assert f("low", _fctx(new_failures=["t::x"])) == ("high", "tests the graph selected now fail")
+    assert f("medium", _fctx(new_failures=["t::x"]))[0] == "high"
+    assert f("low", _fctx(lane="human_review"))[0] == "medium"
+    assert f("low", _fctx(new_files=["src/a.py"]))[0] == "medium"
+    assert f("low", _fctx(new_files=["src/a.py"], changed_tests=["tests/test_a.py"])) == ("low", None)      # new code that brings tests is fine
+    assert f("high", _fctx(lane="human_review")) == ("high", None)                                           # never lowered
+    assert f("low", _fctx()) == ("low", None)
+    assert f("unknown", _fctx(new_failures=["t::x"])) == ("unknown", None)                                 # no verdict stays no verdict

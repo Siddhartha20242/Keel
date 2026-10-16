@@ -76,6 +76,7 @@ class MemGraph:
                     if x not in seen:
                         seen.add(x); nxt.add(x)
             frontier = nxt
+        seen.discard(path)          # a file is not its own importer, even when imports form a cycle
         return len({x for x in seen if x in self.src_files})
 
     # --- algorithms ----------------------------------------------------
@@ -238,10 +239,16 @@ def main():
     from . import graph as G
     db = G.connect()
     real = real_cases(db)
+    if "--real" in sys.argv:                  # equivalence on the real cases only, without the slow synthetic part
+        print(json.dumps({k: v for k, v in real.items() if k != "cases"}))
+        cs = real["cases"]
+        print(f"{len(cs)} cases: tests equal {sum(c['tests_equal'] for c in cs)}, blast equal {sum(c['blast_equal'] for c in cs)}, "
+              f"lane equal {sum(c['lane_equal'] for c in cs)}, max |score diff| {max(abs(c['score_graph'] - c['score_mem']) for c in cs):.4f}")
+        return
     print(json.dumps({k: v for k, v in real.items() if k != "cases"}))
     for r in real["cases"]:
         print(r)
-    sizes = tuple(int(x) for x in sys.argv[1:]) or (1_000, 10_000, 100_000)
+    sizes = tuple(int(x) for x in sys.argv[1:] if x.isdigit()) or (1_000, 10_000, 100_000)
     syn = synthetic(db, sizes)
     out = pathlib.Path(__file__).resolve().parents[1] / "data" / "ablation.json"
     out.write_text(json.dumps({"real": real, "synthetic": syn}, indent=1))

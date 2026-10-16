@@ -52,10 +52,11 @@ def load_code_graph(db, name, code, history, covers, meta):
     g.query("MATCH (f:File), (t:Test {path:f.path}) CREATE (f)-[:CONTAINS_TEST]->(t)")
     for b in _batches(code.get("imports", [])):
         g.query("""UNWIND $rows AS r MATCH (a:File {path:r.src}), (b:File {path:r.dst})
-                   CREATE (a)-[:IMPORTS]->(b)""", {"rows": b})
+                   CREATE (a)-[:IMPORTS]->(b), (b)-[:IMPORTED_BY]->(a)""", {"rows": b})
     for b in _batches(code["calls"]):
+        # CALLED_BY is CALLS reversed: FalkorDB's BFS follows outgoing edges, so "who calls X" needs the reverse relationship
         g.query("""UNWIND $rows AS r MATCH (a:Symbol {qname:r.src}), (b:Symbol {qname:r.dst})
-                   CREATE (a)-[:CALLS {n:r.n, w:1}]->(b)""", {"rows": b})
+                   CREATE (a)-[:CALLS {n:r.n, w:1}]->(b), (b)-[:CALLED_BY]->(a)""", {"rows": b})
         g.query("""UNWIND $rows AS r MATCH (a:Test {id:r.src}), (b:Symbol {qname:r.dst})
                    CREATE (a)-[:STATIC_CALLS {n:r.n}]->(b)""", {"rows": b})
     for b in _batches(covers):

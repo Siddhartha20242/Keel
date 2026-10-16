@@ -14,12 +14,20 @@ BLOB = {"id": "pr7", "pr": 7, "title": "t", "at": "2026-10-16", "symbols": ["sho
 
 @pytest.fixture()
 def db(monkeypatch):
+    """Local FalkorDB by default. KEEL_TEST_ON_STORE=1 runs the same tests against the store configured in the environment (e.g. Cloud)."""
+    import os
     try:
-        from keel import graph as G
-        d = G.connect(); d.list_graphs()
+        if os.environ.get("KEEL_TEST_ON_STORE") == "1":
+            d = persist.persistent_db()
+            assert d is not None, "KEEL_TEST_ON_STORE=1 needs KEEL_STORE_HOST"
+        else:
+            from keel import graph as G
+            d = G.connect(); d.list_graphs()
+            monkeypatch.setenv("KEEL_STORE_HOST", "localhost")
+    except AssertionError:
+        raise
     except Exception:
         pytest.skip("FalkorDB not running")
-    monkeypatch.setenv("KEEL_STORE_HOST", "localhost")
     monkeypatch.setenv("KEEL_STORE_REPO", REPO)
     for name in (f"keel_audit_{REPO}", f"keel_mem_{REPO}"):
         try:

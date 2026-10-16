@@ -44,7 +44,7 @@ def tb():
 
 
 CTX = {"pr": 9, "title": "t", "edited": ["shortener.store.Store.shorten"], "files": ["src/shortener/store.py"], "new_files": [], "changed_tests": [],
-       "tests": {"new_failures": []}, "diff": "-            if url in self._by_url:\n+            if url not in self._by_url:"}
+       "tests": {"new_failures": []}, "risk": {"lane": "canary"}, "diff": "-            if url in self._by_url:\n+            if url not in self._by_url:"}
 
 
 def test_the_skeptic_walks_then_cites_only_walks_it_made(tb, monkeypatch):
