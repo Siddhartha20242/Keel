@@ -34,8 +34,9 @@ All of this ran on this repo, on a small URL shortener in [`demo-app/`](demo-app
 - **Release.** After a person merges, the image is built, run, smoke tested and published, then smoke tested every hour. A failing
   check opens an incident issue.
 - **Memory.** When a PR closes, what happened to it goes into a hash-chained ledger and later triage and analysis recall it. Point Keel
-  at a FalkorDB with `KEEL_STORE_HOST` (for example FalkorDB Cloud) and that graph is the source of truth, with the file on the
-  `keel-memory` branch rewritten from it as a backup. With none set, the file is the store.
+  at a FalkorDB with `KEEL_STORE_HOST` (for example the one in `docker-compose.yml`, which keeps its data on a volume) and that graph
+  is the source of truth, with the file on the `keel-memory` branch rewritten from it as a backup. With none set, the file is the store.
+  GitHub's runners cannot reach a database on your machine, so in CI the files are the store.
 
 The agent never writes Cypher. It picks from a fixed set of tools, and any symbol it names is checked against the graph first, so
 an invented name returns `unknown_symbol` and runs nothing.
@@ -103,6 +104,17 @@ python -m keel replay 9822a035 --mode llm       # a model does the work (keys go
 python -m pytest tests                          # 47 tests; some need FalkorDB
 ```
 
+### With Docker (no Python setup, free)
+
+```bash
+docker compose up -d falkordb                                    # FalkorDB on a volume; FalkorDB Browser at http://localhost:3000
+docker compose run --rm keel python -m keel.evaluate --rebuild   # the whole evaluation inside a container (about 45 s)
+docker compose run --rm keel python -m pytest tests -q
+```
+
+Set `KEEL_STORE_PASSWORD` in `.env` to require a password; `KEEL_DB_PORT` and `KEEL_UI_PORT` change the host ports if 6379 or 3000 is taken.
+`scripts/store_check.py` runs ten end-to-end checks against whatever store `.env` points at.
+
 For the GitHub pipeline, add an `OPENAI_API_KEY` repository secret (any OpenAI-compatible endpoint; set `OPENAI_BASE_URL` and
 `KEEL_MODEL` as repository variables) and let Actions open pull requests.
 
@@ -116,7 +128,7 @@ For the GitHub pipeline, add an `OPENAI_API_KEY` repository secret (any OpenAI-c
 - The gate only blocks a merge if branch protection requires its check, which this repo does not set.
 - The risk weights and lane thresholds are hand-set; there is no ground truth to score them against.
 - I have not run Keel on a large monorepo; the 100k-node numbers above are synthetic.
-- The persistent store is tested against a local FalkorDB container, not FalkorDB Cloud.
+- The persistent store is tested against FalkorDB in Docker (with a password, on a non-default port, and across a restart), not against a hosted service.
 
 ## AI assistance
 

@@ -37,7 +37,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           OUTCOME: ${{ github.event.pull_request.merged && 'merged' || 'rejected' }}
-          # Optional persistent FalkorDB (e.g. FalkorDB Cloud). Only this job, which runs main's code and never a PR's, gets the credentials.
+          # Optional persistent FalkorDB (one the runner can reach, e.g. a server you run). Only this job, which runs main's code and never a PR's, gets the credentials.
           # With none set, memory and the ledger live in the JSONL files on the keel-memory branch, as before.
           KEEL_STORE_HOST: ${{ secrets.KEEL_STORE_HOST }}
           KEEL_STORE_PORT: ${{ secrets.KEEL_STORE_PORT }}

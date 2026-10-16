@@ -23,7 +23,10 @@ def db(monkeypatch):
         else:
             from keel import graph as G
             d = G.connect(); d.list_graphs()
-            monkeypatch.setenv("KEEL_STORE_HOST", "localhost")
+            # the store under test is the same FalkorDB the working connection uses (localhost, or the `falkordb` service in Docker)
+            monkeypatch.setenv("KEEL_STORE_HOST", os.environ.get("KEEL_DB_HOST", "localhost"))
+            monkeypatch.setenv("KEEL_STORE_PORT", os.environ.get("KEEL_DB_PORT", "6379"))
+            monkeypatch.setenv("KEEL_STORE_PASSWORD", os.environ.get("KEEL_DB_PASSWORD", ""))
     except AssertionError:
         raise
     except Exception:

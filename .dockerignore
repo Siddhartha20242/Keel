@@ -1,0 +1,9 @@
+.venv
+.git
+targets
+data/work
+data/*.cov
+__pycache__
+.env
+ci-out
+out

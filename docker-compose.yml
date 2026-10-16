@@ -1,0 +1,30 @@
+# FalkorDB on a volume (free, self-hosted) plus Keel itself.
+#   docker compose up -d falkordb                                   # the database; FalkorDB Browser at http://localhost:3000
+#   docker compose run --rm keel python -m keel.evaluate --rebuild  # the evaluation inside a container
+#   docker compose run --rm keel python -m pytest tests -q          # the tests
+# Optional password: put KEEL_STORE_PASSWORD in .env. Ports can be changed with KEEL_DB_PORT and KEEL_UI_PORT.
+services:
+  falkordb:
+    image: falkordb/falkordb:latest
+    ports:
+      - "${KEEL_DB_PORT:-6379}:6379"
+      - "${KEEL_UI_PORT:-3000}:3000"
+    volumes:
+      - falkordb-data:/var/lib/falkordb/data
+    environment:
+      REDIS_ARGS: "--save 60 1 --appendonly yes ${KEEL_STORE_PASSWORD:+--requirepass ${KEEL_STORE_PASSWORD}}"
+    restart: unless-stopped
+
+  keel:
+    build: .
+    depends_on:
+      - falkordb
+    environment:
+      KEEL_DB_HOST: falkordb
+      KEEL_DB_PASSWORD: ${KEEL_STORE_PASSWORD:-}
+      KEEL_STORE_HOST: falkordb
+      KEEL_STORE_PASSWORD: ${KEEL_STORE_PASSWORD:-}
+    profiles: ["tools"]
+
+volumes:
+  falkordb-data:

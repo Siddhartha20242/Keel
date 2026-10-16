@@ -52,11 +52,13 @@ PROVEN means I ran it and saw the result below. WRITTEN means the code exists bu
 | Round: give the Fixer the PR's diff | `python scripts/fixer_bench.py 3` | no room to measure a gain: the Fixer without the diff already fixed the broken-dedupe branch 3 of 3 times with `gpt-oss-20b` (about 250 s per run, mostly rate-limit waits). Not shipped |
 | Round: floor the Skeptic's verdict by what the graph proved (tests failing -> high; human_review lane or untested new code -> at least medium; never lowers) | live Skeptic x4 on the PR #2 context | the model said `high` 4 of 4, so I could not reproduce the `medium` I saw once on GitHub. The floor is a guarantee (unit-tested), not a measured gain |
 | Round: BFS for the caller and importer counts in the risk score | `python -m keel.ablation --real`, `scripts/replay_all.py` | answers identical to the dict version on 12 of 12 cases, lanes unchanged. It also fixed a bug in the old pattern: in an import cycle a file counted as its own importer (22 instead of 21 on Flask), which nudged scores up by about 0.003. The speed-up is only shown on synthetic graphs (446 ms to 3 ms at 30k nodes); on the 500-symbol Flask graph it does not matter |
+| FalkorDB in Docker as the persistent store: password, non-default port, restart | a container with `--requirepass`, a volume and `--appendonly yes` on port 6380; `scripts/store_check.py` (10/10), then `docker restart` and `docker rm` + a new container on the same volume | 10 of 10 checks pass; a wrong password is rejected; the ledger (4 records) still verified and `explain` still worked after a restart and after the container was deleted and recreated on the same volume |
+| Docker setup: `docker compose up -d falkordb` and `docker compose run --rm keel ...` | built the image (44 s), ran `python -m keel.evaluate --rebuild` inside it, then the tests | the same numbers as on the host: localization 9/11/12 and test selection 88% / 79% / 38%; tests 44 passed, 14 skipped (they need the repo's git history or prebuilt graphs). Found and fixed along the way: a worktree volume that went stale between containers; compose setting `KEEL_STORE_HOST` made file-fallback tests use the store |
 
 ## WRITTEN (code exists, not run)
-- The persistent store against **FalkorDB Cloud** (or any remote FalkorDB): only a local container was used. It needs the secrets
-  `KEEL_STORE_HOST` (and optionally `KEEL_STORE_PORT`, `KEEL_STORE_USERNAME`, `KEEL_STORE_PASSWORD`) and the variable `KEEL_STORE_SSL`.
-  Credentials go only to `memory.yml` (it runs main's code); PR-time analysis reads the JSONL snapshot, not the store.
+- The persistent store in **GitHub Actions**: runners cannot reach FalkorDB on your machine, so CI keeps memory and the ledger in the
+  JSONL files on the `keel-memory` branch. `memory.yml` would use a store if `KEEL_STORE_*` secrets pointed at a reachable FalkorDB
+  (for example one on a server you run); I have not run that, and no hosted FalkorDB (Cloud) was used because it costs money.
 - Checks on the Fixer's own draft PR: a PR opened with the default token does not start `pr.yml` (PR #6 has no checks). A
   `KEEL_PAT` secret would start them; I have not set one.
 - `fix.yml` (the human `keel:fix` label) and the `incident` job: no label was applied and no smoke check has failed. An incident issue opened by the default token

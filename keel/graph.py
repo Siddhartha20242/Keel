@@ -6,8 +6,12 @@ from falkordb import FalkorDB
 QUERIES = pathlib.Path(__file__).resolve().parents[1] / "queries"
 
 
-def connect(host="localhost", port=6379) -> FalkorDB:
-    return FalkorDB(host=host, port=port)
+def connect(host=None, port=None) -> FalkorDB:
+    """The working FalkorDB (graphs rebuilt per commit). KEEL_DB_HOST / KEEL_DB_PORT / KEEL_DB_PASSWORD override localhost:6379,
+    which is how the Docker setup points Keel at the `falkordb` service."""
+    import os
+    return FalkorDB(host=host or os.environ.get("KEEL_DB_HOST", "localhost"), port=int(port or os.environ.get("KEEL_DB_PORT") or 6379),
+                    password=os.environ.get("KEEL_DB_PASSWORD") or None)
 
 
 def code_graph_name(repo: str, case_id: str) -> str:

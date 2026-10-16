@@ -1,21 +1,21 @@
-"""Check a remote FalkorDB (for example FalkorDB Cloud) end to end against Keel's persistent store.
+"""Check a FalkorDB (the one in docker-compose.yml, or any other) end to end against Keel's persistent store.
 
 Put the connection in .env (never in chat or in git):
     KEEL_STORE_HOST=...   KEEL_STORE_PORT=...   KEEL_STORE_USERNAME=...   KEEL_STORE_PASSWORD=...   KEEL_STORE_SSL=1
-then:  python scripts/cloud_check.py
+then:  python scripts/store_check.py
 
-It writes to throwaway graphs named keel_audit_cloudcheck* and deletes them at the end. It does not touch other graphs.
+It writes to throwaway graphs named keel_audit_storecheck* and deletes them at the end. It does not touch other graphs.
 """
 import json, os, pathlib, statistics, sys, tempfile, time
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from dotenv import load_dotenv
 load_dotenv(ROOT / ".env")
-os.environ["KEEL_STORE_REPO"] = f"cloudcheck{int(time.time()) % 100000}"
+os.environ["KEEL_STORE_REPO"] = f"storecheck{int(time.time()) % 100000}"
 
 from keel import ledger, memory_io, persist
 
-BLOB = {"id": "pr1", "pr": 1, "title": "cloud check", "at": "2026-10-16", "symbols": ["shortener.store.Store.shorten"], "files": ["src/shortener/store.py"],
+BLOB = {"id": "pr1", "pr": 1, "title": "store check", "at": "2026-10-16", "symbols": ["shortener.store.Store.shorten"], "files": ["src/shortener/store.py"],
         "tests_selected": 5, "new_failures": [], "risk": 0.2, "lane": "canary", "skeptic_risk": "medium", "decision": "d", "level": "human",
         "graph_lane": "canary", "run": "1", "findings": [{"text": "x", "file": "src/shortener/store.py", "test": "test_x", "via": "blast_radius"}]}
 results = []

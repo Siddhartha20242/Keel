@@ -36,6 +36,8 @@ def tb():
     except Exception:
         pytest.skip("FalkorDB not running")
     sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
+    if not sha:
+        pytest.skip("not a git checkout (for example inside the Docker image)")
     wt = ROOT / "data" / "work" / "skeptic-walk-test"
     if not wt.exists():
         subprocess.run(["git", "worktree", "add", "--detach", "-f", str(wt), sha], cwd=ROOT, check=True, capture_output=True)

@@ -1,7 +1,7 @@
 """The persistent FalkorDB store for the audit ledger and agent memory.
 
-Configure with KEEL_STORE_HOST (and optionally KEEL_STORE_PORT, KEEL_STORE_USERNAME, KEEL_STORE_PASSWORD, KEEL_STORE_SSL=1), for example
-a FalkorDB Cloud instance or any FalkorDB you keep running. With none set there is no persistent store and Keel falls back to the
+Configure with KEEL_STORE_HOST (and optionally KEEL_STORE_PORT, KEEL_STORE_USERNAME, KEEL_STORE_PASSWORD, KEEL_STORE_SSL=1). The free way
+is FalkorDB in Docker on a volume (`docker compose up -d falkordb`); any other FalkorDB you keep running works the same. With none set there is no persistent store and Keel falls back to the
 JSONL files on the `keel-memory` branch. Those files stay as a backup either way: they are rewritten from the graph after every write.
 
 Credentials are only passed to trusted jobs (memory.yml runs main's code, never a PR's). PR-time analysis reads the JSONL snapshot.
